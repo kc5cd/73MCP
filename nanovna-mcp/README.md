@@ -29,14 +29,22 @@ the other MCP sub-projects instead, which is also a more natural home for it now
 named `nanovna-mcp`. Moved by AntScopeZ's session, source-identical (all 10 tracked files
 copied as-is), with a knowledge-transfer message sent to this repo's session afterward.
 
+**Decoupling confirmed (2026-09-03)**: `nanovna-mcp` should always have been separate from
+`antscope-mcp` and never coupled with it — Casey confirmed this directly after the move.
+`antscope-mcp` instead targets a distinct, still-undefined AntScopeZ application API to be
+designed/built separately; it has no dependency on this daemon.
+
 ## Where the pieces live
 
 - **This daemon** (`nanovna-mcp/`, this branch): owns the serial port, exposes REST+WebSocket.
-- **MCP server + webapp**: not yet built. How this relates to `73MCP`'s `antscope-mcp`
-  sub-project (previously planned as the consumer of this daemon, back when it lived in
-  AntScopeZ) is an open question as of the move — see the knowledge-transfer message for
-  detail, since this daemon and `antscope-mcp`'s plan doc were designed together as one
-  system split across two repos, and now both pieces live in the same repo.
+- **MCP server + webapp**: not yet built, but will be built here, directly against this
+  daemon's API below.
+
+**`nanovna-mcp` is a standalone project, fully decoupled from `73MCP`'s `antscope-mcp`
+sub-project** (confirmed by Casey 2026-09-03, after a brief period where the two were
+treated as coupled during this daemon's move from AntScopeZ — see `## History`).
+`antscope-mcp` targets a separate, not-yet-defined AntScopeZ application API and has no
+relationship to this daemon or this protocol.
 
 ```
 NanoVNA (USB-serial, VID 0x0483 / PID 0x5740)
