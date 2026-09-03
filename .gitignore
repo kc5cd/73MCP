@@ -1,0 +1,12 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Node (for future JS/TS sub-projects)
+node_modules/
+
+# Misc
+*.log

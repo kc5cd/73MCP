@@ -1,0 +1,23 @@
+[project]
+name = "nanovna-api"
+version = "0.1.0"
+description = "Local network API daemon for NanoVNA antenna analyzers -- serial protocol owner, consumed by nanovna-mcp and a companion webapp"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "pyserial>=3.5",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+nanovna-api = "nanovna_api.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["nanovna_api*"]
