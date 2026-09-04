@@ -46,6 +46,7 @@ class NanovnaDevice:
     def __init__(self) -> None:
         self._serial: serial.Serial | None = None
         self._port: str | None = None
+        self._last_command: str | None = None
 
     @property
     def is_connected(self) -> bool:
@@ -71,6 +72,7 @@ class NanovnaDevice:
         if not self.is_connected:
             raise NotConnectedError("not connected to a NanoVNA")
         self._serial.write(cmd.encode("ascii"))
+        self._last_command = cmd.strip()
 
     def read_line(self) -> str:
         """Block for a single line (blank on read timeout)."""
@@ -88,10 +90,24 @@ class NanovnaDevice:
         timeout (empty line from read_line()) also ends the loop
         defensively, so a device that stops responding mid-reply doesn't
         hang the caller forever.
+
+        The NanoVNA's shell echoes the command line itself back as the
+        first line of every reply (confirmed live against real hardware,
+        2026-09-04 -- e.g. sending "frequencies" gets back a literal
+        "frequencies" line before the actual frequency list). That echoed
+        line isn't data and is dropped here, once, if it matches the
+        command just sent -- otherwise callers like sweep.py end up with
+        a spurious leading point (freq/re/im all parse to 0.0 via the
+        parsers' permissive fallback).
         """
         lines: list[str] = []
+        echo_pending = self._last_command is not None
         while True:
             line = self.read_line()
+            if echo_pending:
+                echo_pending = False
+                if line == self._last_command:
+                    continue
             if protocol.PROMPT_MARKER in line:
                 return lines
             if line == "":
