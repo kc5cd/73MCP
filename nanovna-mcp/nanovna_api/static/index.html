@@ -491,6 +491,29 @@
     return gaps;
   }
 
+  // Large, faint band-name text centered in the band's own region, sized
+  // to fill most of the chart height -- a watermark identifying the band
+  // at a glance, sitting behind the mode-color rows rather than a small
+  // corner label competing with them for space.
+  function drawBandWatermark(name, x0, x1, padT, plotH) {
+    const maxWidth = (x1 - x0) * 0.85;
+    const maxHeight = plotH * 0.8;
+    if (maxWidth < 10 || maxHeight < 10) return;
+    ctx.save();
+    const refSize = 100;
+    ctx.font = `bold ${refSize}px sans-serif`;
+    const refWidth = ctx.measureText(name).width;
+    const fontSize = Math.max(0, Math.min(maxHeight, refSize * (maxWidth / refWidth)));
+    if (fontSize >= 10) {
+      ctx.font = `bold ${fontSize}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+      ctx.fillText(name, (x0 + x1) / 2, padT + plotH / 2);
+    }
+    ctx.restore();
+  }
+
   function drawBandOverlay(fMin, fMax, x, padT, plotH) {
     ctx.save();
     ctx.font = '9px sans-serif';
@@ -543,6 +566,8 @@
       ctx.fillStyle = 'rgba(79, 176, 255, 0.12)';
       ctx.fillRect(x0, padT, Math.max(1, x1 - x0), plotH);
 
+      drawBandWatermark(band.name, x0, x1, padT, plotH);
+
       if (band.modes) {
         for (const seg of band.modes) {
           LICENSE_ROWS.forEach((cls, row) => {
@@ -555,13 +580,6 @@
             ctx.fillRect(sx0, padT + row * ROW_H, Math.max(1, sx1 - sx0), ROW_H);
           });
         }
-      }
-
-      ctx.fillStyle = 'rgba(198, 224, 245, 0.85)';
-      const label = band.name;
-      const labelW = ctx.measureText(label).width;
-      if (x1 - x0 > labelW + 4) {
-        ctx.fillText(label, x0 + 2, padT + MODE_STRIP_H + 9);
       }
     }
     ctx.restore();
