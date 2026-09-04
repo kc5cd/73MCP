@@ -99,6 +99,12 @@
     </div>
   </div>
   <div class="row" style="margin-top:10px;">
+    <label style="display:flex; align-items:center; gap:6px; width:auto;">
+      <input type="checkbox" id="hamBands" style="width:auto;">
+      Highlight amateur bands
+    </label>
+  </div>
+  <div class="row" style="margin-top:10px;">
     <button id="sweepBtn" disabled>Sweep once</button>
     <button id="tuneBtn" disabled>Start live tuning</button>
   </div>
@@ -127,6 +133,7 @@
   const stopMhz = $('stopMhz');
   const points = $('points');
   const swrMaxSel = $('swrMax');
+  const hamBandsEl = $('hamBands');
   const sweepBtn = $('sweepBtn');
   const tuneBtn = $('tuneBtn');
   const canvas = $('chart');
@@ -135,6 +142,31 @@
   const minFreqEl = $('minFreq');
   const minZEl = $('minZ');
   const logEl = $('log');
+
+  // US amateur (Part 97) band edges -- overall allocation width only, not
+  // mode/license-class sub-bands. 60m is channelized (5 discrete 2.8kHz-wide
+  // channels, not a continuous allocation) so it's listed by channel center
+  // frequency instead of a start/stop range.
+  const BANDS = [
+    { name: '2200m', startHz: 135700, stopHz: 137800 },
+    { name: '630m', startHz: 472000, stopHz: 479000 },
+    { name: '160m', startHz: 1800000, stopHz: 2000000 },
+    { name: '80m', startHz: 3500000, stopHz: 4000000 },
+    { name: '60m', channelsHz: [5332000, 5348000, 5358500, 5373000, 5405000] },
+    { name: '40m', startHz: 7000000, stopHz: 7300000 },
+    { name: '30m', startHz: 10100000, stopHz: 10150000 },
+    { name: '20m', startHz: 14000000, stopHz: 14350000 },
+    { name: '17m', startHz: 18068000, stopHz: 18168000 },
+    { name: '15m', startHz: 21000000, stopHz: 21450000 },
+    { name: '12m', startHz: 24890000, stopHz: 24990000 },
+    { name: '10m', startHz: 28000000, stopHz: 29700000 },
+    { name: '6m', startHz: 50000000, stopHz: 54000000 },
+    { name: '2m', startHz: 144000000, stopHz: 148000000 },
+    { name: '1.25m', startHz: 222000000, stopHz: 225000000 },
+    { name: '70cm', startHz: 420000000, stopHz: 450000000 },
+    { name: '33cm', startHz: 902000000, stopHz: 928000000 },
+    { name: '23cm', startHz: 1240000000, stopHz: 1300000000 },
+  ];
 
   let swrMax = parseFloat(swrMaxSel.value); // y-axis ceiling; values above are clipped visually
   let connected = false;
@@ -149,9 +181,15 @@
     el.addEventListener('change', () => localStorage.setItem(key, el.value));
   }
   swrMax = parseFloat(swrMaxSel.value);
+  hamBandsEl.checked = localStorage.getItem('nvt_hambands') === '1';
 
   swrMaxSel.addEventListener('change', () => {
     swrMax = parseFloat(swrMaxSel.value);
+    drawChart(lastPoints);
+  });
+
+  hamBandsEl.addEventListener('change', () => {
+    localStorage.setItem('nvt_hambands', hamBandsEl.checked ? '1' : '0');
     drawChart(lastPoints);
   });
 
@@ -247,6 +285,45 @@
     return { start_hz: Math.round(start * 1e6), stop_hz: Math.round(stop * 1e6), points: Math.max(2, n) };
   }
 
+  function drawBandOverlay(fMin, fMax, x, padT, plotH) {
+    ctx.save();
+    ctx.font = '9px sans-serif';
+    for (const band of BANDS) {
+      if (band.channelsHz) {
+        // Channelized band (60m): mark the middle of each discrete channel
+        // with a vertical line rather than shading a continuous range.
+        for (const [i, ch] of band.channelsHz.entries()) {
+          if (ch < fMin || ch > fMax) continue;
+          const cx = x(ch);
+          ctx.strokeStyle = 'rgba(242, 184, 75, 0.85)';
+          ctx.setLineDash([3, 2]);
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(cx, padT);
+          ctx.lineTo(cx, padT + plotH);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = 'rgba(242, 184, 75, 0.9)';
+          ctx.fillText(`${band.name} ch${i + 1}`, cx + 2, padT + 9);
+        }
+        continue;
+      }
+      const start = Math.max(fMin, band.startHz);
+      const stop = Math.min(fMax, band.stopHz);
+      if (start >= stop) continue;
+      const x0 = x(start), x1 = x(stop);
+      ctx.fillStyle = 'rgba(79, 176, 255, 0.12)';
+      ctx.fillRect(x0, padT, Math.max(1, x1 - x0), plotH);
+      ctx.fillStyle = 'rgba(198, 224, 245, 0.85)';
+      const label = band.name;
+      const labelW = ctx.measureText(label).width;
+      if (x1 - x0 > labelW + 4) {
+        ctx.fillText(label, x0 + 2, padT + 9);
+      }
+    }
+    ctx.restore();
+  }
+
   function drawChart(pts) {
     lastPoints = pts;
     const w = canvas.clientWidth || canvas.width;
@@ -280,6 +357,10 @@
     const fMin = Math.min(...freqs), fMax = Math.max(...freqs);
     const x = (f) => padL + plotW * (fMax > fMin ? (f - fMin) / (fMax - fMin) : 0.5);
     const y = (swr) => padT + plotH * (1 - (Math.min(swr, swrMax) - 1) / (swrMax - 1));
+
+    if (hamBandsEl.checked) {
+      drawBandOverlay(fMin, fMax, x, padT, plotH);
+    }
 
     ctx.strokeStyle = '#4fb0ff';
     ctx.lineWidth = 2;
