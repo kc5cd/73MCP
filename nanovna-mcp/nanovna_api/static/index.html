@@ -87,6 +87,16 @@
       <label for="points">Points</label>
       <input id="points" type="number" step="1" min="2" max="401" placeholder="101">
     </div>
+    <div class="field">
+      <label for="swrMax">Chart max SWR</label>
+      <select id="swrMax">
+        <option value="2">2:1</option>
+        <option value="3">3:1</option>
+        <option value="5" selected>5:1</option>
+        <option value="10">10:1</option>
+        <option value="20">20:1</option>
+      </select>
+    </div>
   </div>
   <div class="row" style="margin-top:10px;">
     <button id="sweepBtn" disabled>Sweep once</button>
@@ -116,6 +126,7 @@
   const startMhz = $('startMhz');
   const stopMhz = $('stopMhz');
   const points = $('points');
+  const swrMaxSel = $('swrMax');
   const sweepBtn = $('sweepBtn');
   const tuneBtn = $('tuneBtn');
   const canvas = $('chart');
@@ -125,17 +136,24 @@
   const minZEl = $('minZ');
   const logEl = $('log');
 
-  const SWR_MAX = 5; // fixed y-axis ceiling; values above are clipped visually
+  let swrMax = parseFloat(swrMaxSel.value); // y-axis ceiling; values above are clipped visually
   let connected = false;
   let tuning = false;
   let ws = null;
+  let lastPoints = [];
 
   // Remember last-used sweep params across reloads (field convenience).
-  for (const [el, key] of [[startMhz, 'nvt_start'], [stopMhz, 'nvt_stop'], [points, 'nvt_points']]) {
+  for (const [el, key] of [[startMhz, 'nvt_start'], [stopMhz, 'nvt_stop'], [points, 'nvt_points'], [swrMaxSel, 'nvt_swrmax']]) {
     const saved = localStorage.getItem(key);
     if (saved) el.value = saved;
     el.addEventListener('change', () => localStorage.setItem(key, el.value));
   }
+  swrMax = parseFloat(swrMaxSel.value);
+
+  swrMaxSel.addEventListener('change', () => {
+    swrMax = parseFloat(swrMaxSel.value);
+    drawChart(lastPoints);
+  });
 
   function log(msg, isError) {
     logEl.textContent = msg;
@@ -230,6 +248,7 @@
   }
 
   function drawChart(pts) {
+    lastPoints = pts;
     const w = canvas.clientWidth || canvas.width;
     const h = canvas.clientHeight || canvas.height;
     canvas.width = w * devicePixelRatio;
@@ -244,13 +263,15 @@
     ctx.fillStyle = '#8b96a5';
     ctx.font = '10px sans-serif';
     ctx.lineWidth = 1;
-    for (const swr of [1, 1.5, 2, 3, SWR_MAX]) {
-      const y = padT + plotH * (1 - (swr - 1) / (SWR_MAX - 1));
+    const tickCount = 5;
+    for (let i = 0; i < tickCount; i++) {
+      const swr = 1 + (swrMax - 1) * i / (tickCount - 1);
+      const y = padT + plotH * (1 - (swr - 1) / (swrMax - 1));
       ctx.beginPath();
       ctx.moveTo(padL, y);
       ctx.lineTo(w - padR, y);
       ctx.stroke();
-      ctx.fillText(swr.toFixed(1), 2, y + 3);
+      ctx.fillText(swr.toFixed(swrMax > 10 ? 0 : 1), 2, y + 3);
     }
 
     if (!pts.length) return;
@@ -258,7 +279,7 @@
     const freqs = pts.map((p) => p.freq_hz);
     const fMin = Math.min(...freqs), fMax = Math.max(...freqs);
     const x = (f) => padL + plotW * (fMax > fMin ? (f - fMin) / (fMax - fMin) : 0.5);
-    const y = (swr) => padT + plotH * (1 - (Math.min(swr, SWR_MAX) - 1) / (SWR_MAX - 1));
+    const y = (swr) => padT + plotH * (1 - (Math.min(swr, swrMax) - 1) / (swrMax - 1));
 
     ctx.strokeStyle = '#4fb0ff';
     ctx.lineWidth = 2;
@@ -372,7 +393,7 @@
     tuneLoop();
   });
 
-  window.addEventListener('resize', () => drawChart([]));
+  window.addEventListener('resize', () => drawChart(lastPoints));
 
   refreshDevices();
   refreshStatus();
