@@ -31,8 +31,11 @@ _lock = asyncio.Lock()
 
 
 @app.get("/", response_class=HTMLResponse)
-async def index() -> str:
-    return _INDEX_HTML.read_text(encoding="utf-8")
+async def index() -> HTMLResponse:
+    # no-store: this page is actively being iterated on -- a stale cached
+    # copy after a daemon restart has already caused one confusing "the fix
+    # isn't there" report (chart JS unchanged after a real server-side fix).
+    return HTMLResponse(_INDEX_HTML.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
 
 
 class ConnectRequest(BaseModel):
