@@ -94,8 +94,15 @@ MCP server driven the same way `nanovna-mcp`'s was (a real stdio
 `ClientSession`, or the MCP inspector CLI), confirming `get_status` and
 `get_recent_decodes` reflect what WSJT-X is actually doing.
 
-## Next step
+## Status (2026-09-03)
 
-This document records the language/runtime decision and rough shape only.
-Actual implementation should go through the same plan-mode
-scope/design/phasing process `nanovna-mcp` did before writing code.
+Implemented across 4 approval-gated phases, same process `nanovna-mcp` went through:
+`wsjtx_udp/protocol.py` (decode primitives), `wsjtx_udp/listener.py` (per-instance buffering),
+`wsjtx_mcp/server.py`/`__main__.py`/`pyproject.toml` (3 MCP tools), and a manual end-to-end
+verification pass (see `README.md`'s "Running" section). One implementation detail differs
+from this doc's original phrasing: the UDP listener is started via `MCPServer`'s `lifespan`
+hook, not "before calling `mcp.run()`" — `mcp.run()` owns the event loop itself, so there's no
+loop available beforehand to bind the socket on.
+
+Real-WSJT-X verification (as opposed to synthetic UDP datagrams) is still outstanding, same
+status as `nanovna-mcp`'s real-hardware verification gap.
