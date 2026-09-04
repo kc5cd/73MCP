@@ -266,6 +266,7 @@
   let tuning = false;
   let ws = null;
   let lastPoints = [];
+  let k4hezAnimHandle = null;
 
   // Remember last-used sweep params across reloads (field convenience).
   for (const [el, key] of [[startMhz, 'nvt_start'], [stopMhz, 'nvt_stop'], [points, 'nvt_points'], [swrMaxSel, 'nvt_swrmax']]) {
@@ -288,11 +289,13 @@
     localStorage.setItem('nvt_hambands', hamBandsEl.checked ? '1' : '0');
     bandLegendEl.hidden = !hamBandsEl.checked;
     drawChart(lastPoints);
+    ensureK4hezAnimation();
   });
 
   k4hezEl.addEventListener('change', () => {
     localStorage.setItem('nvt_k4hez', k4hezEl.checked ? '1' : '0');
     drawChart(lastPoints);
+    ensureK4hezAnimation();
   });
 
   licenseSel.addEventListener('change', () => {
@@ -502,6 +505,17 @@
     return gaps;
   }
 
+  // A neon tube's brightness isn't steady: a slow "breathing" pulse from
+  // the ballast, plus occasional quick dips when it's about to need a
+  // re-strike. Purely time-based (no stored random state) so every frame
+  // is reproducible from performance.now() alone.
+  function neonFlicker(t) {
+    const breathe = 0.5 + 0.18 * Math.sin(t / 850);
+    const chaos = Math.sin(t / 61) * Math.sin(t / 139) * Math.sin(t / 47);
+    const dip = chaos > 0.9 ? 0.35 : 1;
+    return Math.max(0.12, Math.min(0.8, breathe * dip));
+  }
+
   // Large, faint band-name text centered in the band's own region, sized
   // to fill most of the chart height -- a watermark identifying the band
   // at a glance, sitting behind the mode-color rows rather than a small
@@ -520,9 +534,10 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       if (k4hezEl.checked) {
-        ctx.fillStyle = 'rgba(255, 16, 240, 0.55)';
+        const a = neonFlicker(performance.now());
+        ctx.fillStyle = `rgba(255, 16, 240, ${a.toFixed(3)})`;
         ctx.shadowColor = '#ff10f0';
-        ctx.shadowBlur = Math.max(8, fontSize * 0.12);
+        ctx.shadowBlur = Math.max(6, fontSize * 0.12 * (0.6 + a));
       } else {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
       }
@@ -677,6 +692,22 @@
       : '--';
   }
 
+  // Redraws on every animation frame purely to animate the neon flicker --
+  // stops itself the moment K4HEZ Style, band highlighting, or the sweep
+  // data goes away, rather than running an idle rAF loop forever.
+  function k4hezTick() {
+    k4hezAnimHandle = null;
+    if (!k4hezEl.checked || !hamBandsEl.checked || !lastPoints.length) return;
+    drawChart(lastPoints);
+    k4hezAnimHandle = requestAnimationFrame(k4hezTick);
+  }
+
+  function ensureK4hezAnimation() {
+    if (k4hezEl.checked && hamBandsEl.checked && lastPoints.length && k4hezAnimHandle === null) {
+      k4hezAnimHandle = requestAnimationFrame(k4hezTick);
+    }
+  }
+
   async function sweepOnceRest() {
     const params = sweepParams();
     const data = await api('/sweep', {
@@ -693,6 +724,7 @@
       log('sweeping...');
       await sweepOnceRest();
       log('sweep complete');
+      ensureK4hezAnimation();
     } catch (e) {
       log(e.message, true);
     } finally {
@@ -718,6 +750,7 @@
         if (msg.done) { resolve(); return; }
         buf.push(msg);
         drawChart(buf);
+        ensureK4hezAnimation();
       });
       socket.addEventListener('close', () => { if (ws === socket) ws = null; resolve(); });
       socket.addEventListener('error', () => reject(new Error('websocket error')));
