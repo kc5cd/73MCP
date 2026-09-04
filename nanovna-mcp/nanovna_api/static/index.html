@@ -107,6 +107,10 @@
       <input type="checkbox" id="hamBands" style="width:auto;">
       Highlight amateur bands
     </label>
+    <label style="display:flex; align-items:center; gap:6px; width:auto;">
+      <input type="checkbox" id="k4hez" style="width:auto;">
+      K4HEZ Style
+    </label>
   </div>
   <div id="bandLegend" class="row" hidden style="margin-top:8px; font-size:11px; color:var(--muted); gap:12px;">
     <span><span class="swatch" style="background:rgba(255,92,92,0.95)"></span> RTTY/Data</span>
@@ -158,6 +162,7 @@
   const points = $('points');
   const swrMaxSel = $('swrMax');
   const hamBandsEl = $('hamBands');
+  const k4hezEl = $('k4hez');
   const bandLegendEl = $('bandLegend');
   const licenseSel = $('license');
   const sweepBtn = $('sweepBtn');
@@ -272,6 +277,7 @@
   hamBandsEl.checked = localStorage.getItem('nvt_hambands') === '1';
   bandLegendEl.hidden = !hamBandsEl.checked;
   licenseSel.value = localStorage.getItem('nvt_license') || '';
+  k4hezEl.checked = localStorage.getItem('nvt_k4hez') === '1';
 
   swrMaxSel.addEventListener('change', () => {
     swrMax = parseFloat(swrMaxSel.value);
@@ -281,6 +287,11 @@
   hamBandsEl.addEventListener('change', () => {
     localStorage.setItem('nvt_hambands', hamBandsEl.checked ? '1' : '0');
     bandLegendEl.hidden = !hamBandsEl.checked;
+    drawChart(lastPoints);
+  });
+
+  k4hezEl.addEventListener('change', () => {
+    localStorage.setItem('nvt_k4hez', k4hezEl.checked ? '1' : '0');
     drawChart(lastPoints);
   });
 
@@ -508,7 +519,13 @@
       ctx.font = `bold ${fontSize}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+      if (k4hezEl.checked) {
+        ctx.fillStyle = 'rgba(255, 16, 240, 0.55)';
+        ctx.shadowColor = '#ff10f0';
+        ctx.shadowBlur = Math.max(8, fontSize * 0.12);
+      } else {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+      }
       ctx.fillText(name, (x0 + x1) / 2, padT + plotH / 2);
     }
     ctx.restore();
