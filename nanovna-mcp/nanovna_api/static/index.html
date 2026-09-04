@@ -402,6 +402,15 @@
     blue: 'rgba(79, 176, 255, 0.95)',
     orange: 'rgba(255, 140, 40, 0.95)',
   };
+  // Same hues as MODE_COLORS but as bare "r, g, b" triples, for building a
+  // flicker-modulated rgba() string in K4HEZ Style.
+  const MODE_RGB = {
+    red: '255, 92, 92',
+    green: '60, 200, 120',
+    yellow: '235, 210, 70',
+    blue: '79, 176, 255',
+    orange: '255, 140, 40',
+  };
   // Stacked per-class rows, ARRL-chart style: top-to-bottom Extra/Advanced/
   // General/Technician, each row showing only the sub-range that class can
   // actually use -- not one bar plus a boundary marker.
@@ -509,12 +518,17 @@
   // the ballast, plus occasional quick dips when it's about to need a
   // re-strike. Purely time-based (no stored random state) so every frame
   // is reproducible from performance.now() alone.
-  function neonFlicker(t) {
-    const breathe = 0.5 + 0.18 * Math.sin(t / 850);
-    const chaos = Math.sin(t / 61) * Math.sin(t / 139) * Math.sin(t / 47);
+  // `phase`/`speed` let a second light run the same fade shape on its own
+  // clock (different tube, different ballast) rather than in lockstep.
+  function neonFlicker(t, phase = 0, speed = 1) {
+    const tt = t * speed + phase;
+    const breathe = 0.5 + 0.18 * Math.sin(tt / 850);
+    const chaos = Math.sin(tt / 61) * Math.sin(tt / 139) * Math.sin(tt / 47);
     const dip = chaos > 0.9 ? 0.675 : 1; // half as deep a dip as before
     return Math.max(0.12, Math.min(0.8, breathe * dip));
   }
+  const ROW_FLICKER_PHASE = 4231; // arbitrary offset so rows and band labels don't sync up
+  const ROW_FLICKER_SPEED = 1.37;
 
   // Large, faint band-name text centered in the band's own region, sized
   // to fill most of the chart height -- a watermark identifying the band
@@ -549,6 +563,22 @@
   function drawBandOverlay(fMin, fMax, x, padT, plotH) {
     ctx.save();
     ctx.font = '9px sans-serif';
+
+    // Mode-color rows glow too in K4HEZ Style, on their own flicker clock
+    // (ROW_FLICKER_PHASE/SPEED) so they don't pulse in lockstep with the
+    // band-name watermarks. Computed once per frame, not per row, so every
+    // bar shares one "tube".
+    const rowGlow = k4hezEl.checked ? neonFlicker(performance.now(), ROW_FLICKER_PHASE, ROW_FLICKER_SPEED) : null;
+    const setRowFill = (colorName) => {
+      if (rowGlow !== null) {
+        ctx.shadowColor = `rgb(${MODE_RGB[colorName]})`;
+        ctx.shadowBlur = 3 + rowGlow * 5;
+        ctx.fillStyle = `rgba(${MODE_RGB[colorName]}, ${rowGlow.toFixed(3)})`;
+      } else {
+        ctx.fillStyle = MODE_COLORS[colorName];
+      }
+    };
+
     for (const band of BANDS) {
       if (band.channelsHz) {
         // Channelized band (60m): each channel is only 2.8kHz wide, which
@@ -574,9 +604,10 @@
 
           LICENSE_ROWS.forEach((cls, row) => {
             if (band.licensedClasses && !band.licensedClasses.includes(cls)) return;
-            ctx.fillStyle = MODE_COLORS.blue;
+            setRowFill('blue');
             ctx.fillRect(rx0, padT + row * ROW_H, rx1 - rx0, ROW_H);
           });
+          ctx.shadowBlur = 0;
 
           ctx.strokeStyle = 'rgba(242, 184, 75, 0.85)';
           ctx.setLineDash([3, 2]);
@@ -608,10 +639,11 @@
             const s0 = Math.max(fMin, range[0]), s1 = Math.min(fMax, range[1]);
             if (s0 >= s1) return;
             const sx0 = x(s0), sx1 = x(s1);
-            ctx.fillStyle = MODE_COLORS[privilegeColor(seg, cls)];
+            setRowFill(privilegeColor(seg, cls));
             ctx.fillRect(sx0, padT + row * ROW_H, Math.max(1, sx1 - sx0), ROW_H);
           });
         }
+        ctx.shadowBlur = 0;
       }
     }
     ctx.restore();
