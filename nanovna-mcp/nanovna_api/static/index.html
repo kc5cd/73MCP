@@ -420,6 +420,68 @@
     ctx.restore();
   }
 
+  // Every [startHz, stopHz] range the given license class may transmit in,
+  // across all bands this app knows about -- used to gray out the rest of
+  // a sweep. A band with no `modes` and no `licensedClasses` is open to
+  // every class (6m/2m/1.25m-non-digital/70cm/33cm/23cm); a `modes` segment
+  // with no `privilege` field is likewise unrestricted (e.g. 17m/12m,
+  // General-and-above open equally, so no per-class privilege was needed
+  // there -- but Technician still has no access, handled by `licensedClasses`
+  // being absent meaning "whoever holds any of these `modes` privileges").
+  function licensedIntervals(licenseClass) {
+    const out = [];
+    for (const band of BANDS) {
+      if (band.channelsHz) {
+        if (!band.licensedClasses || band.licensedClasses.includes(licenseClass)) {
+          const half = 1400; // 60m channels are 2.8kHz wide
+          for (const ch of band.channelsHz) out.push([ch - half, ch + half]);
+        }
+        continue;
+      }
+      if (band.licensedClasses) {
+        if (band.licensedClasses.includes(licenseClass)) out.push([band.startHz, band.stopHz]);
+        continue;
+      }
+      if (band.modes) {
+        for (const seg of band.modes) {
+          if (seg.privilege) {
+            const r = seg.privilege[licenseClass];
+            if (r) out.push(r);
+          } else {
+            out.push([seg.startHz, seg.stopHz]);
+          }
+        }
+        continue;
+      }
+      out.push([band.startHz, band.stopHz]);
+    }
+    return out.sort((a, b) => a[0] - b[0]);
+  }
+
+  // Gaps in [fMin, fMax] not covered by any licensed interval -- includes
+  // both license-restricted sub-bands and frequencies outside any amateur
+  // allocation at all (neither is usable, so both get grayed the same way).
+  function unlicensedRanges(fMin, fMax, licenseClass) {
+    const merged = [];
+    for (const [s, e] of licensedIntervals(licenseClass)) {
+      if (e <= fMin || s >= fMax) continue;
+      const cs = Math.max(s, fMin), ce = Math.min(e, fMax);
+      if (merged.length && cs <= merged[merged.length - 1][1]) {
+        merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], ce);
+      } else {
+        merged.push([cs, ce]);
+      }
+    }
+    const gaps = [];
+    let cursor = fMin;
+    for (const [s, e] of merged) {
+      if (s > cursor) gaps.push([cursor, s]);
+      cursor = Math.max(cursor, e);
+    }
+    if (cursor < fMax) gaps.push([cursor, fMax]);
+    return gaps;
+  }
+
   function drawBandOverlay(fMin, fMax, x, padT, plotH) {
     ctx.save();
     ctx.font = '9px sans-serif';
@@ -548,6 +610,14 @@
     ctx.beginPath();
     ctx.arc(bx, by, 4, 0, Math.PI * 2);
     ctx.fill();
+
+    if (licenseSel.value) {
+      ctx.fillStyle = 'rgba(8, 10, 14, 0.6)';
+      for (const [gs, ge] of unlicensedRanges(fMin, fMax, licenseSel.value)) {
+        const gx0 = x(gs), gx1 = x(ge);
+        ctx.fillRect(gx0, padT, Math.max(0, gx1 - gx0), plotH);
+      }
+    }
 
     minSwrEl.textContent = best.swr.toFixed(2) + ':1';
     minFreqEl.textContent = (best.freq_hz / 1e6).toFixed(4) + ' MHz';
