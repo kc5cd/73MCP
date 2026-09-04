@@ -240,7 +240,11 @@
       modes: [{ startHz: 28070000, stopHz: 28150000, color: 'red',
                 privilege: { Technician: [28000000, 28300000], General: [28000000, 29700000], Advanced: [28000000, 29700000], Extra: [28000000, 29700000] } },
               { startHz: 28300000, stopHz: 29300000, color: 'green',
-                privilege: { Technician: [28300000, 28500000], General: [28300000, 29700000], Advanced: [28300000, 29700000], Extra: [28300000, 29700000] } }] },
+                // Technician's 28.3-28.5MHz phone privilege is SSB only --
+                // no AM/image -- unlike General-and-up's full Phone/Image
+                // there, so it's colored yellow (SSB only), not green.
+                privilege: { Technician: { range: [28300000, 28500000], color: 'yellow' },
+                             General: [28300000, 29700000], Advanced: [28300000, 29700000], Extra: [28300000, 29700000] } }] },
     { name: '6m', startHz: 50000000, stopHz: 54000000,
       modes: [{ startHz: 50100000, stopHz: 50300000, color: 'yellow' }] },
     { name: '2m', startHz: 144000000, stopHz: 148000000,
@@ -391,6 +395,18 @@
   const ROW_H = 4;
   const MODE_STRIP_H = LICENSE_ROWS.length * ROW_H;
 
+  // A privilege[class] entry is normally just [startHz, stopHz] (use the
+  // segment's own color). Sometimes a class's privilege is the *same mode
+  // family* but a stricter one -- e.g. Technician's 10m phone privilege is
+  // SSB only, not the full Phone/Image General-and-up get, even though
+  // it's the same 28.3-28.5MHz slice of the same green segment. For that,
+  // an entry can instead be { range: [startHz, stopHz], color: 'yellow' }
+  // to override just that class's row color.
+  function normalizePrivilege(entry) {
+    if (!entry) return null;
+    return Array.isArray(entry) ? { range: entry, color: null } : { range: entry.range, color: entry.color || null };
+  }
+
   // The [startHz, stopHz] a given class may use within one mode segment (or
   // one channel-group band), or null if that class has no privilege there
   // at all. No `privilege` field on a segment/band means every class
@@ -398,7 +414,19 @@
   // and up, where there's no license-class sub-band split.
   function privilegeRange(seg, licenseClass) {
     if (!seg.privilege) return [seg.startHz, seg.stopHz];
-    return seg.privilege[licenseClass] || null;
+    const p = normalizePrivilege(seg.privilege[licenseClass]);
+    return p ? p.range : null;
+  }
+
+  // The color to draw for a given class's row within this segment --
+  // usually the segment's own color, unless that class's privilege entry
+  // overrides it (see normalizePrivilege above).
+  function privilegeColor(seg, licenseClass) {
+    if (seg.privilege) {
+      const p = normalizePrivilege(seg.privilege[licenseClass]);
+      if (p && p.color) return p.color;
+    }
+    return seg.color;
   }
 
   // Every [startHz, stopHz] range the given license class may transmit in,
@@ -426,8 +454,8 @@
       if (band.modes) {
         for (const seg of band.modes) {
           if (seg.privilege) {
-            const r = seg.privilege[licenseClass];
-            if (r) out.push(r);
+            const p = normalizePrivilege(seg.privilege[licenseClass]);
+            if (p) out.push(p.range);
           } else {
             out.push([seg.startHz, seg.stopHz]);
           }
@@ -523,7 +551,7 @@
             const s0 = Math.max(fMin, range[0]), s1 = Math.min(fMax, range[1]);
             if (s0 >= s1) return;
             const sx0 = x(s0), sx1 = x(s1);
-            ctx.fillStyle = MODE_COLORS[seg.color];
+            ctx.fillStyle = MODE_COLORS[privilegeColor(seg, cls)];
             ctx.fillRect(sx0, padT + row * ROW_H, Math.max(1, sx1 - sx0), ROW_H);
           });
         }
