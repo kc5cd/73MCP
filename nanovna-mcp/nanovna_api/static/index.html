@@ -58,6 +58,10 @@
   .readout .stat .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
   #log { font-size: 12px; color: var(--muted); min-height: 1.2em; margin-top: 6px; word-break: break-word; }
   #log.error { color: var(--bad); }
+  .swatch {
+    display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+    margin-right: 3px; vertical-align: -1px;
+  }
 </style>
 </head>
 <body>
@@ -104,6 +108,13 @@
       Highlight amateur bands
     </label>
   </div>
+  <div id="bandLegend" class="row" hidden style="margin-top:8px; font-size:11px; color:var(--muted); gap:12px;">
+    <span><span class="swatch" style="background:rgba(255,92,92,0.95)"></span> RTTY/Data</span>
+    <span><span class="swatch" style="background:rgba(60,200,120,0.95)"></span> Phone/Image</span>
+    <span><span class="swatch" style="background:rgba(235,210,70,0.95)"></span> SSB only</span>
+    <span><span class="swatch" style="background:rgba(79,176,255,0.95)"></span> 60m channel</span>
+    <span><span class="swatch" style="background:rgba(255,140,40,0.95)"></span> 1.25m digital</span>
+  </div>
   <div class="row" style="margin-top:10px;">
     <button id="sweepBtn" disabled>Sweep once</button>
     <button id="tuneBtn" disabled>Start live tuning</button>
@@ -134,6 +145,7 @@
   const points = $('points');
   const swrMaxSel = $('swrMax');
   const hamBandsEl = $('hamBands');
+  const bandLegendEl = $('bandLegend');
   const sweepBtn = $('sweepBtn');
   const tuneBtn = $('tuneBtn');
   const canvas = $('chart');
@@ -147,22 +159,53 @@
   // mode/license-class sub-bands. 60m is channelized (5 discrete 2.8kHz-wide
   // channels, not a continuous allocation) so it's listed by channel center
   // frequency instead of a start/stop range.
+  // Mode sub-segments per band, colored per ARRL band-plan convention:
+  // red=RTTY/Data, green=Phone/Image, yellow=SSB-only (weak-signal VHF
+  // segments), blue=60m (USB phone/CW/RTTY/Data, all 5 channels), orange=
+  // 1.25m fixed digital message forwarding. Derived 2026-09-04 from
+  // arrl.org/band-plan; HF CW/Data-vs-Phone split points are the standard,
+  // well-established ones. Judgment calls worth double-checking against
+  // your own chart: 160m has no Data segment marked here (source was
+  // ambiguous on its exact edges, left uncolored rather than guessed);
+  // the 6m/2m "yellow" ranges are the weak-signal SSB/CW segments, not an
+  // ARRL-labeled "SSB only" line item; the 1.25m orange range is the
+  // 223.52-223.64 "Digital, packet" segment, the closest match to "fixed
+  // digital message forwarding" in the fetched source.
   const BANDS = [
     { name: '2200m', startHz: 135700, stopHz: 137800 },
     { name: '630m', startHz: 472000, stopHz: 479000 },
-    { name: '160m', startHz: 1800000, stopHz: 2000000 },
-    { name: '80m', startHz: 3500000, stopHz: 4000000 },
+    { name: '160m', startHz: 1800000, stopHz: 2000000,
+      modes: [{ startHz: 1843000, stopHz: 2000000, color: 'green' }] },
+    { name: '80m', startHz: 3500000, stopHz: 4000000,
+      modes: [{ startHz: 3500000, stopHz: 3600000, color: 'red' },
+              { startHz: 3600000, stopHz: 4000000, color: 'green' }] },
     { name: '60m', channelsHz: [5332000, 5348000, 5358500, 5373000, 5405000] },
-    { name: '40m', startHz: 7000000, stopHz: 7300000 },
-    { name: '30m', startHz: 10100000, stopHz: 10150000 },
-    { name: '20m', startHz: 14000000, stopHz: 14350000 },
-    { name: '17m', startHz: 18068000, stopHz: 18168000 },
-    { name: '15m', startHz: 21000000, stopHz: 21450000 },
-    { name: '12m', startHz: 24890000, stopHz: 24990000 },
-    { name: '10m', startHz: 28000000, stopHz: 29700000 },
-    { name: '6m', startHz: 50000000, stopHz: 54000000 },
-    { name: '2m', startHz: 144000000, stopHz: 148000000 },
-    { name: '1.25m', startHz: 222000000, stopHz: 225000000 },
+    { name: '40m', startHz: 7000000, stopHz: 7300000,
+      modes: [{ startHz: 7000000, stopHz: 7125000, color: 'red' },
+              { startHz: 7125000, stopHz: 7300000, color: 'green' }] },
+    { name: '30m', startHz: 10100000, stopHz: 10150000,
+      modes: [{ startHz: 10100000, stopHz: 10150000, color: 'red' }] },
+    { name: '20m', startHz: 14000000, stopHz: 14350000,
+      modes: [{ startHz: 14000000, stopHz: 14150000, color: 'red' },
+              { startHz: 14150000, stopHz: 14350000, color: 'green' }] },
+    { name: '17m', startHz: 18068000, stopHz: 18168000,
+      modes: [{ startHz: 18068000, stopHz: 18110000, color: 'red' },
+              { startHz: 18110000, stopHz: 18168000, color: 'green' }] },
+    { name: '15m', startHz: 21000000, stopHz: 21450000,
+      modes: [{ startHz: 21000000, stopHz: 21200000, color: 'red' },
+              { startHz: 21200000, stopHz: 21450000, color: 'green' }] },
+    { name: '12m', startHz: 24890000, stopHz: 24990000,
+      modes: [{ startHz: 24890000, stopHz: 24930000, color: 'red' },
+              { startHz: 24930000, stopHz: 24990000, color: 'green' }] },
+    { name: '10m', startHz: 28000000, stopHz: 29700000,
+      modes: [{ startHz: 28070000, stopHz: 28150000, color: 'red' },
+              { startHz: 28300000, stopHz: 29300000, color: 'green' }] },
+    { name: '6m', startHz: 50000000, stopHz: 54000000,
+      modes: [{ startHz: 50100000, stopHz: 50300000, color: 'yellow' }] },
+    { name: '2m', startHz: 144000000, stopHz: 148000000,
+      modes: [{ startHz: 144100000, stopHz: 144275000, color: 'yellow' }] },
+    { name: '1.25m', startHz: 222000000, stopHz: 225000000,
+      modes: [{ startHz: 223520000, stopHz: 223640000, color: 'orange' }] },
     { name: '70cm', startHz: 420000000, stopHz: 450000000 },
     { name: '33cm', startHz: 902000000, stopHz: 928000000 },
     { name: '23cm', startHz: 1240000000, stopHz: 1300000000 },
@@ -182,6 +225,7 @@
   }
   swrMax = parseFloat(swrMaxSel.value);
   hamBandsEl.checked = localStorage.getItem('nvt_hambands') === '1';
+  bandLegendEl.hidden = !hamBandsEl.checked;
 
   swrMaxSel.addEventListener('change', () => {
     swrMax = parseFloat(swrMaxSel.value);
@@ -190,6 +234,7 @@
 
   hamBandsEl.addEventListener('change', () => {
     localStorage.setItem('nvt_hambands', hamBandsEl.checked ? '1' : '0');
+    bandLegendEl.hidden = !hamBandsEl.checked;
     drawChart(lastPoints);
   });
 
@@ -285,6 +330,15 @@
     return { start_hz: Math.round(start * 1e6), stop_hz: Math.round(stop * 1e6), points: Math.max(2, n) };
   }
 
+  const MODE_COLORS = {
+    red: 'rgba(255, 92, 92, 0.95)',
+    green: 'rgba(60, 200, 120, 0.95)',
+    yellow: 'rgba(235, 210, 70, 0.95)',
+    blue: 'rgba(79, 176, 255, 0.95)',
+    orange: 'rgba(255, 140, 40, 0.95)',
+  };
+  const MODE_STRIP_H = 5;
+
   function drawBandOverlay(fMin, fMax, x, padT, plotH) {
     ctx.save();
     ctx.font = '9px sans-serif';
@@ -310,6 +364,8 @@
           }
           ctx.fillStyle = 'rgba(79, 176, 255, 0.22)';
           ctx.fillRect(rx0, padT, rx1 - rx0, plotH);
+          ctx.fillStyle = MODE_COLORS.blue;
+          ctx.fillRect(rx0, padT, rx1 - rx0, MODE_STRIP_H);
 
           ctx.strokeStyle = 'rgba(242, 184, 75, 0.85)';
           ctx.setLineDash([3, 2]);
@@ -330,11 +386,22 @@
       const x0 = x(start), x1 = x(stop);
       ctx.fillStyle = 'rgba(79, 176, 255, 0.12)';
       ctx.fillRect(x0, padT, Math.max(1, x1 - x0), plotH);
+
+      if (band.modes) {
+        for (const seg of band.modes) {
+          const s0 = Math.max(fMin, seg.startHz), s1 = Math.min(fMax, seg.stopHz);
+          if (s0 >= s1) continue;
+          const sx0 = x(s0), sx1 = x(s1);
+          ctx.fillStyle = MODE_COLORS[seg.color];
+          ctx.fillRect(sx0, padT, Math.max(1, sx1 - sx0), MODE_STRIP_H);
+        }
+      }
+
       ctx.fillStyle = 'rgba(198, 224, 245, 0.85)';
       const label = band.name;
       const labelW = ctx.measureText(label).width;
       if (x1 - x0 > labelW + 4) {
-        ctx.fillText(label, x0 + 2, padT + 9);
+        ctx.fillText(label, x0 + 2, padT + MODE_STRIP_H + 9);
       }
     }
     ctx.restore();
