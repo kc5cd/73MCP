@@ -290,11 +290,27 @@
     ctx.font = '9px sans-serif';
     for (const band of BANDS) {
       if (band.channelsHz) {
-        // Channelized band (60m): mark the middle of each discrete channel
-        // with a vertical line rather than shading a continuous range.
+        // Channelized band (60m): each channel is only 2.8kHz wide, which
+        // rounds to sub-pixel (invisible) at typical HF sweep spans -- so
+        // its shaded background is drawn with a floored minimum pixel
+        // width, centered on the true channel edges, with a dashed line
+        // marking the exact center on top.
+        const CHANNEL_WIDTH_HZ = 2800;
+        const MIN_PX = 5;
         for (const [i, ch] of band.channelsHz.entries()) {
           if (ch < fMin || ch > fMax) continue;
           const cx = x(ch);
+          const chStart = Math.max(fMin, ch - CHANNEL_WIDTH_HZ / 2);
+          const chStop = Math.min(fMax, ch + CHANNEL_WIDTH_HZ / 2);
+          let rx0 = chStart < chStop ? x(chStart) : cx;
+          let rx1 = chStart < chStop ? x(chStop) : cx;
+          if (rx1 - rx0 < MIN_PX) {
+            rx0 = cx - MIN_PX / 2;
+            rx1 = cx + MIN_PX / 2;
+          }
+          ctx.fillStyle = 'rgba(79, 176, 255, 0.22)';
+          ctx.fillRect(rx0, padT, rx1 - rx0, plotH);
+
           ctx.strokeStyle = 'rgba(242, 184, 75, 0.85)';
           ctx.setLineDash([3, 2]);
           ctx.lineWidth = 1;
