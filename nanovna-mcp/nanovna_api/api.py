@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import threading
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from . import sweep
@@ -18,12 +20,19 @@ from .device import NanovnaDevice, NotConnectedError, discover_ports
 
 app = FastAPI(title="nanovna-api", version="0.1.0")
 
+_INDEX_HTML = Path(__file__).parent / "static" / "index.html"
+
 # One device, one lock: every request that touches the serial port waits
 # its turn. A NanoVNA's classic ASCII protocol is fundamentally
 # request/reply/single-session anyway (see sweep.py) -- there's no
 # meaningful way to interleave two callers' commands even if we wanted to.
 _device = NanovnaDevice()
 _lock = asyncio.Lock()
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index() -> str:
+    return _INDEX_HTML.read_text(encoding="utf-8")
 
 
 class ConnectRequest(BaseModel):

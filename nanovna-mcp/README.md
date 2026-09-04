@@ -37,8 +37,10 @@ designed/built separately; it has no dependency on this daemon.
 ## Where the pieces live
 
 - **This daemon** (`nanovna-mcp/`, this branch): owns the serial port, exposes REST+WebSocket.
-- **MCP server + webapp**: not yet built, but will be built here, directly against this
-  daemon's API below.
+- **MCP server**: not yet built.
+- **Webapp**: built 2026-09-04 — a single self-contained page served by the daemon itself at
+  `/` (`nanovna_api/static/index.html`), no build step, no CDN dependencies (works offline on
+  the LAN). See `## Webapp` below.
 
 **`nanovna-mcp` is a standalone project, fully decoupled from `73MCP`'s `antscope-mcp`
 sub-project** (confirmed by Casey 2026-09-03, after a brief period where the two were
@@ -133,6 +135,17 @@ curl http://<host>:8765/devices
 curl -X POST http://<host>:8765/connect -H "Content-Type: application/json" -d "{\"port\":\"COM20\"}"
 curl -X POST http://<host>:8765/sweep -H "Content-Type: application/json" -d "{\"start_hz\":420000000,\"stop_hz\":540000000,\"points\":101}"
 ```
+
+## Webapp
+
+Open `http://<host>:8765/` in any browser on the same LAN (phone, laptop, tablet) — the daemon
+serves the page itself, so there's nothing separate to install or deploy. Flow: pick a device
+from the dropdown and Connect, enter a Start/Stop MHz range and point count, then either
+**Sweep once** or **Start live tuning** (repeats the sweep continuously over the WebSocket
+stream so the SWR curve updates live while you adjust the antenna). The chart marks the
+lowest-SWR point and reports its frequency and impedance. Last-used sweep params are
+remembered per-browser (`localStorage`). No auth, matching this project's local-network-only
+v1 scope.
 
 ## Tests
 
