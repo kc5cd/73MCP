@@ -114,6 +114,7 @@
     <span><span class="swatch" style="background:rgba(235,210,70,0.95)"></span> SSB only</span>
     <span><span class="swatch" style="background:rgba(79,176,255,0.95)"></span> 60m channel</span>
     <span><span class="swatch" style="background:rgba(255,140,40,0.95)"></span> 1.25m digital</span>
+    <span style="color:var(--text);">Rows top→bottom: Extra / Advanced / General / Technician</span>
   </div>
   <div class="row" style="margin-top:8px;">
     <div class="field" style="flex:1 1 160px;">
@@ -383,41 +384,21 @@
     blue: 'rgba(79, 176, 255, 0.95)',
     orange: 'rgba(255, 140, 40, 0.95)',
   };
-  const MODE_STRIP_H = 5;
+  // Stacked per-class rows, ARRL-chart style: top-to-bottom Extra/Advanced/
+  // General/Technician, each row showing only the sub-range that class can
+  // actually use -- not one bar plus a boundary marker.
+  const LICENSE_ROWS = ['Extra', 'Advanced', 'General', 'Technician'];
+  const ROW_H = 4;
+  const MODE_STRIP_H = LICENSE_ROWS.length * ROW_H;
 
-  // Marks where the selected license class's privilege boundary sits
-  // within a mode segment, when it's narrower than the full segment (the
-  // segment's own color strip already shows the full RTTY/Data or
-  // Phone/Image range -- this adds "and here's where *you* can start").
-  function drawLicenseMarkers(fMin, fMax, x, padT, plotH, licenseClass) {
-    if (!licenseClass) return;
-    ctx.save();
-    ctx.font = 'bold 9px sans-serif';
-    const abbrev = { Technician: 'Tech', General: 'Gen', Advanced: 'Adv', Extra: 'Extra' }[licenseClass];
-    const mark = (hz) => {
-      if (hz < fMin || hz > fMax) return;
-      const mx = x(hz);
-      ctx.strokeStyle = 'rgba(230, 233, 239, 0.95)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(mx, padT);
-      ctx.lineTo(mx, padT + plotH);
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(230, 233, 239, 0.95)';
-      ctx.fillText(abbrev, mx + 2, padT + plotH - 4);
-    };
-    for (const band of BANDS) {
-      if (!band.modes) continue;
-      for (const seg of band.modes) {
-        if (!seg.privilege) continue;
-        const range = seg.privilege[licenseClass];
-        if (!range) continue; // not privileged in this segment at all
-        const [ls, le] = range;
-        if (ls > seg.startHz) mark(ls);
-        if (le < seg.stopHz) mark(le);
-      }
-    }
-    ctx.restore();
+  // The [startHz, stopHz] a given class may use within one mode segment (or
+  // one channel-group band), or null if that class has no privilege there
+  // at all. No `privilege` field on a segment/band means every class
+  // (Technician included) has the full range -- true for 6m/2m/1.25m/70cm
+  // and up, where there's no license-class sub-band split.
+  function privilegeRange(seg, licenseClass) {
+    if (!seg.privilege) return [seg.startHz, seg.stopHz];
+    return seg.privilege[licenseClass] || null;
   }
 
   // Every [startHz, stopHz] range the given license class may transmit in,
@@ -507,8 +488,12 @@
           }
           ctx.fillStyle = 'rgba(79, 176, 255, 0.22)';
           ctx.fillRect(rx0, padT, rx1 - rx0, plotH);
-          ctx.fillStyle = MODE_COLORS.blue;
-          ctx.fillRect(rx0, padT, rx1 - rx0, MODE_STRIP_H);
+
+          LICENSE_ROWS.forEach((cls, row) => {
+            if (band.licensedClasses && !band.licensedClasses.includes(cls)) return;
+            ctx.fillStyle = MODE_COLORS.blue;
+            ctx.fillRect(rx0, padT + row * ROW_H, rx1 - rx0, ROW_H);
+          });
 
           ctx.strokeStyle = 'rgba(242, 184, 75, 0.85)';
           ctx.setLineDash([3, 2]);
@@ -532,11 +517,15 @@
 
       if (band.modes) {
         for (const seg of band.modes) {
-          const s0 = Math.max(fMin, seg.startHz), s1 = Math.min(fMax, seg.stopHz);
-          if (s0 >= s1) continue;
-          const sx0 = x(s0), sx1 = x(s1);
-          ctx.fillStyle = MODE_COLORS[seg.color];
-          ctx.fillRect(sx0, padT, Math.max(1, sx1 - sx0), MODE_STRIP_H);
+          LICENSE_ROWS.forEach((cls, row) => {
+            const range = privilegeRange(seg, cls);
+            if (!range) return; // this class has no privilege in this segment
+            const s0 = Math.max(fMin, range[0]), s1 = Math.min(fMax, range[1]);
+            if (s0 >= s1) return;
+            const sx0 = x(s0), sx1 = x(s1);
+            ctx.fillStyle = MODE_COLORS[seg.color];
+            ctx.fillRect(sx0, padT + row * ROW_H, Math.max(1, sx1 - sx0), ROW_H);
+          });
         }
       }
 
@@ -586,7 +575,6 @@
 
     if (hamBandsEl.checked) {
       drawBandOverlay(fMin, fMax, x, padT, plotH);
-      drawLicenseMarkers(fMin, fMax, x, padT, plotH, licenseSel.value);
     }
 
     ctx.strokeStyle = '#4fb0ff';
