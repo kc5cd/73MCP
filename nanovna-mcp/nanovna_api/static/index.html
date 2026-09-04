@@ -117,14 +117,13 @@
     <span><span class="swatch" style="background:rgba(60,200,120,0.95)"></span> Phone/Image</span>
     <span><span class="swatch" style="background:rgba(235,210,70,0.95)"></span> SSB only</span>
     <span><span class="swatch" style="background:rgba(79,176,255,0.95)"></span> 60m channel</span>
-    <span><span class="swatch" style="background:rgba(255,140,40,0.95)"></span> 1.25m digital</span>
     <span style="color:var(--text);">Rows top→bottom: Extra / Advanced / General / Technician</span>
   </div>
   <div class="row" style="margin-top:8px;">
     <div class="field" style="flex:1 1 160px;">
       <label for="license">License level</label>
       <select id="license">
-        <option value="">(select to show your privileges)</option>
+        <option value="">All licenses</option>
         <option value="Technician">Technician</option>
         <option value="General">General</option>
         <option value="Advanced">Advanced</option>
@@ -175,57 +174,46 @@
   const logEl = $('log');
 
   // US amateur (Part 97) band edges -- overall allocation width only, not
-  // mode/license-class sub-bands. 60m is channelized (5 discrete 2.8kHz-wide
-  // channels, not a continuous allocation) so it's listed by channel center
-  // frequency instead of a start/stop range.
+  // mode/license-class sub-bands. 60m is channelized (5 discrete channels,
+  // not a continuous allocation) so it's listed by channel center frequency
+  // instead of a start/stop range; one entry is itself a [start, stop] pair
+  // rather than a bare center, for the one channel the FCC widened to a
+  // 15kHz-wide segment in 2021 (see channelRange() below).
   // Mode sub-segments per band, colored per ARRL band-plan convention:
-  // red=RTTY/Data, green=Phone/Image, yellow=SSB-only (weak-signal VHF
-  // segments), blue=60m (USB phone/CW/RTTY/Data, all 5 channels), orange=
-  // 1.25m fixed digital message forwarding. Derived 2026-09-04 from
-  // arrl.org/band-plan; HF CW/Data-vs-Phone split points are the standard,
-  // well-established ones. Judgment calls worth double-checking against
-  // your own chart: 160m has no Data segment marked here (source was
-  // ambiguous on its exact edges, left uncolored rather than guessed);
-  // the 6m/2m "yellow" ranges are the weak-signal SSB/CW segments, not an
-  // ARRL-labeled "SSB only" line item; the 1.25m orange range is the
-  // 223.52-223.64 "Digital, packet" segment, the closest match to "fixed
-  // digital message forwarding" in the fetched source.
-  // License-class privilege sub-ranges (47 CFR 97.301, ITU Region 2/US,
-  // stable since the 2007 restructuring) attached to the mode segments
-  // above where a class's privilege is narrower than the full segment;
-  // a class not listed in `privilege` (or a band/channel-group listed in
-  // `licensedClasses` that omits it) has no privilege there at all.
-  // NOT independently re-verified this pass -- WebFetch attempts against
-  // ecfr.gov/law.cornell.edu/arrl.org came back blocked, 404, or garbled,
-  // so this is from general knowledge rather than a freshly-checked
-  // source. Double check against your own license reference before
-  // relying on it operationally.
+  // red=RTTY/Data, green=Phone/Image, yellow=SSB-only, blue=60m (USB
+  // phone/CW/RTTY/Data, all 5 channels). Frequencies and per-class
+  // privilege sub-ranges (47 CFR 97.301) sourced 2026-09-04 from
+  // bands.md (Casey's own ARRL chart transcription) at the repo root --
+  // this supersedes the earlier general-knowledge-derived data. A band
+  // with no `modes` array at all (2200m/630m/160m/1.25m/70cm/33cm/23cm)
+  // means every mode is allowed together throughout, with no meaningful
+  // color split; a class not listed in a segment's `privilege` (or a
+  // band/channel-group listed in `licensedClasses` that omits it) has no
+  // privilege there at all.
   const LICENSE_CLASSES = ['Technician', 'General', 'Advanced', 'Extra'];
   const BANDS = [
     { name: '2200m', startHz: 135700, stopHz: 137800, licensedClasses: ['General', 'Advanced', 'Extra'] },
     { name: '630m', startHz: 472000, stopHz: 479000, licensedClasses: ['General', 'Advanced', 'Extra'] },
-    { name: '160m', startHz: 1800000, stopHz: 2000000,
-      modes: [{ startHz: 1843000, stopHz: 2000000, color: 'green',
-                privilege: { General: [1843000, 2000000], Advanced: [1843000, 2000000], Extra: [1843000, 2000000] } }] },
+    { name: '160m', startHz: 1800000, stopHz: 2000000, licensedClasses: ['General', 'Advanced', 'Extra'] },
     { name: '80m', startHz: 3500000, stopHz: 4000000,
       modes: [{ startHz: 3500000, stopHz: 3600000, color: 'red',
-                privilege: { Technician: [3525000, 3600000], General: [3525000, 3600000], Advanced: [3500000, 3600000], Extra: [3500000, 3600000] } },
+                privilege: { Technician: [3525000, 3600000], General: [3525000, 3600000], Advanced: [3525000, 3600000], Extra: [3500000, 3600000] } },
               { startHz: 3600000, stopHz: 4000000, color: 'green',
-                privilege: { General: [3800000, 4000000], Advanced: [3800000, 4000000], Extra: [3600000, 4000000] } }] },
-    { name: '60m', channelsHz: [5332000, 5348000, 5358500, 5373000, 5405000], licensedClasses: ['General', 'Advanced', 'Extra'] },
+                privilege: { General: [3800000, 4000000], Advanced: [3700000, 4000000], Extra: [3600000, 4000000] } }] },
+    { name: '60m', channelsHz: [5332000, 5348000, [5351500, 5366500], 5373000, 5405000], licensedClasses: ['General', 'Advanced', 'Extra'] },
     { name: '40m', startHz: 7000000, stopHz: 7300000,
       modes: [{ startHz: 7000000, stopHz: 7125000, color: 'red',
-                privilege: { Technician: [7025000, 7125000], General: [7025000, 7125000], Advanced: [7000000, 7125000], Extra: [7000000, 7125000] } },
+                privilege: { Technician: [7025000, 7125000], General: [7025000, 7125000], Advanced: [7025000, 7125000], Extra: [7000000, 7125000] } },
               { startHz: 7125000, stopHz: 7300000, color: 'green',
-                privilege: { General: [7175000, 7300000], Advanced: [7175000, 7300000], Extra: [7125000, 7300000] } }] },
+                privilege: { General: [7175000, 7300000], Advanced: [7125000, 7300000], Extra: [7125000, 7300000] } }] },
     { name: '30m', startHz: 10100000, stopHz: 10150000,
       modes: [{ startHz: 10100000, stopHz: 10150000, color: 'red',
                 privilege: { General: [10100000, 10150000], Advanced: [10100000, 10150000], Extra: [10100000, 10150000] } }] },
     { name: '20m', startHz: 14000000, stopHz: 14350000,
       modes: [{ startHz: 14000000, stopHz: 14150000, color: 'red',
-                privilege: { General: [14000000, 14150000], Advanced: [14000000, 14150000], Extra: [14000000, 14150000] } },
+                privilege: { General: [14025000, 14150000], Advanced: [14025000, 14150000], Extra: [14000000, 14150000] } },
               { startHz: 14150000, stopHz: 14350000, color: 'green',
-                privilege: { General: [14225000, 14350000], Advanced: [14225000, 14350000], Extra: [14150000, 14350000] } }] },
+                privilege: { General: [14225000, 14350000], Advanced: [14175000, 14350000], Extra: [14150000, 14350000] } }] },
     { name: '17m', startHz: 18068000, stopHz: 18168000,
       modes: [{ startHz: 18068000, stopHz: 18110000, color: 'red',
                 privilege: { General: [18068000, 18110000], Advanced: [18068000, 18110000], Extra: [18068000, 18110000] } },
@@ -233,29 +221,30 @@
                 privilege: { General: [18110000, 18168000], Advanced: [18110000, 18168000], Extra: [18110000, 18168000] } }] },
     { name: '15m', startHz: 21000000, stopHz: 21450000,
       modes: [{ startHz: 21000000, stopHz: 21200000, color: 'red',
-                privilege: { Technician: [21025000, 21200000], General: [21025000, 21200000], Advanced: [21000000, 21200000], Extra: [21000000, 21200000] } },
+                privilege: { Technician: [21025000, 21200000], General: [21025000, 21200000], Advanced: [21025000, 21200000], Extra: [21000000, 21200000] } },
               { startHz: 21200000, stopHz: 21450000, color: 'green',
-                privilege: { General: [21275000, 21450000], Advanced: [21275000, 21450000], Extra: [21200000, 21450000] } }] },
+                privilege: { General: [21275000, 21450000], Advanced: [21225000, 21450000], Extra: [21200000, 21450000] } }] },
     { name: '12m', startHz: 24890000, stopHz: 24990000,
       modes: [{ startHz: 24890000, stopHz: 24930000, color: 'red',
                 privilege: { General: [24890000, 24930000], Advanced: [24890000, 24930000], Extra: [24890000, 24930000] } },
               { startHz: 24930000, stopHz: 24990000, color: 'green',
                 privilege: { General: [24930000, 24990000], Advanced: [24930000, 24990000], Extra: [24930000, 24990000] } }] },
     { name: '10m', startHz: 28000000, stopHz: 29700000,
-      modes: [{ startHz: 28070000, stopHz: 28150000, color: 'red',
+      modes: [{ startHz: 28000000, stopHz: 28300000, color: 'red',
                 privilege: { Technician: [28000000, 28300000], General: [28000000, 29700000], Advanced: [28000000, 29700000], Extra: [28000000, 29700000] } },
-              { startHz: 28300000, stopHz: 29300000, color: 'green',
+              { startHz: 28300000, stopHz: 29700000, color: 'green',
                 // Technician's 28.3-28.5MHz phone privilege is SSB only --
                 // no AM/image -- unlike General-and-up's full Phone/Image
                 // there, so it's colored yellow (SSB only), not green.
                 privilege: { Technician: { range: [28300000, 28500000], color: 'yellow' },
                              General: [28300000, 29700000], Advanced: [28300000, 29700000], Extra: [28300000, 29700000] } }] },
     { name: '6m', startHz: 50000000, stopHz: 54000000,
-      modes: [{ startHz: 50100000, stopHz: 50300000, color: 'yellow' }] },
+      modes: [{ startHz: 50000000, stopHz: 50100000, color: 'red' },
+              { startHz: 50100000, stopHz: 54000000, color: 'green' }] },
     { name: '2m', startHz: 144000000, stopHz: 148000000,
-      modes: [{ startHz: 144100000, stopHz: 144275000, color: 'yellow' }] },
-    { name: '1.25m', startHz: 222000000, stopHz: 225000000,
-      modes: [{ startHz: 223520000, stopHz: 223640000, color: 'orange' }] },
+      modes: [{ startHz: 144000000, stopHz: 144100000, color: 'red' },
+              { startHz: 144100000, stopHz: 148000000, color: 'green' }] },
+    { name: '1.25m', startHz: 222000000, stopHz: 225000000 },
     { name: '70cm', startHz: 420000000, stopHz: 450000000 },
     { name: '33cm', startHz: 902000000, stopHz: 928000000 },
     { name: '23cm', startHz: 1240000000, stopHz: 1300000000 },
@@ -400,7 +389,6 @@
     green: 'rgba(60, 200, 120, 0.95)',
     yellow: 'rgba(235, 210, 70, 0.95)',
     blue: 'rgba(79, 176, 255, 0.95)',
-    orange: 'rgba(255, 140, 40, 0.95)',
   };
   // Same hues as MODE_COLORS but as bare "r, g, b" triples, for building a
   // flicker-modulated rgba() string in K4HEZ Style.
@@ -409,7 +397,6 @@
     green: '60, 200, 120',
     yellow: '235, 210, 70',
     blue: '79, 176, 255',
-    orange: '255, 140, 40',
   };
   // Stacked per-class rows, ARRL-chart style: top-to-bottom Extra/Advanced/
   // General/Technician, each row showing only the sub-range that class can
@@ -452,6 +439,15 @@
     return seg.color;
   }
 
+  // A 60m channelsHz entry is normally a bare center frequency (2.8kHz-wide
+  // channel implied); the one channel the FCC widened in 2021 is instead
+  // stored as an explicit [startHz, stopHz] pair.
+  function channelRange(ch) {
+    if (Array.isArray(ch)) return ch;
+    const half = 1400;
+    return [ch - half, ch + half];
+  }
+
   // Every [startHz, stopHz] range the given license class may transmit in,
   // across all bands this app knows about -- used to gray out the rest of
   // a sweep. A band with no `modes` and no `licensedClasses` is open to
@@ -465,8 +461,7 @@
     for (const band of BANDS) {
       if (band.channelsHz) {
         if (!band.licensedClasses || band.licensedClasses.includes(licenseClass)) {
-          const half = 1400; // 60m channels are 2.8kHz wide
-          for (const ch of band.channelsHz) out.push([ch - half, ch + half]);
+          for (const ch of band.channelsHz) out.push(channelRange(ch));
         }
         continue;
       }
@@ -579,20 +574,28 @@
       }
     };
 
+    // "All licenses" (blank selection) stacks all 4 classes as thin rows,
+    // same as before. Picking one class instead shows only that class's
+    // privileges, expanded to fill the whole strip height rather than a
+    // sliver.
+    const selectedClass = licenseSel.value;
+    const rows = selectedClass ? [selectedClass] : LICENSE_ROWS;
+    const rowH = selectedClass ? MODE_STRIP_H : ROW_H;
+
     for (const band of BANDS) {
       if (band.channelsHz) {
-        // Channelized band (60m): each channel is only 2.8kHz wide, which
+        // Channelized band (60m): most channels are only 2.8kHz wide, which
         // rounds to sub-pixel (invisible) at typical HF sweep spans -- so
-        // its shaded background is drawn with a floored minimum pixel
-        // width, centered on the true channel edges, with a dashed line
-        // marking the exact center on top.
-        const CHANNEL_WIDTH_HZ = 2800;
+        // each channel's shaded background is drawn with a floored minimum
+        // pixel width, centered on the true channel edges, with a dashed
+        // line marking the exact center on top.
         const MIN_PX = 5;
         for (const [i, ch] of band.channelsHz.entries()) {
-          if (ch < fMin || ch > fMax) continue;
-          const cx = x(ch);
-          const chStart = Math.max(fMin, ch - CHANNEL_WIDTH_HZ / 2);
-          const chStop = Math.min(fMax, ch + CHANNEL_WIDTH_HZ / 2);
+          const [chStartHz, chStopHz] = channelRange(ch);
+          if (chStopHz < fMin || chStartHz > fMax) continue;
+          const cx = x((chStartHz + chStopHz) / 2);
+          const chStart = Math.max(fMin, chStartHz);
+          const chStop = Math.min(fMax, chStopHz);
           let rx0 = chStart < chStop ? x(chStart) : cx;
           let rx1 = chStart < chStop ? x(chStop) : cx;
           if (rx1 - rx0 < MIN_PX) {
@@ -602,10 +605,10 @@
           ctx.fillStyle = 'rgba(79, 176, 255, 0.22)';
           ctx.fillRect(rx0, padT, rx1 - rx0, plotH);
 
-          LICENSE_ROWS.forEach((cls, row) => {
+          rows.forEach((cls, row) => {
             if (band.licensedClasses && !band.licensedClasses.includes(cls)) return;
             setRowFill('blue');
-            ctx.fillRect(rx0, padT + row * ROW_H, rx1 - rx0, ROW_H);
+            ctx.fillRect(rx0, padT + row * rowH, rx1 - rx0, rowH);
           });
           ctx.shadowBlur = 0;
 
@@ -633,14 +636,14 @@
 
       if (band.modes) {
         for (const seg of band.modes) {
-          LICENSE_ROWS.forEach((cls, row) => {
+          rows.forEach((cls, row) => {
             const range = privilegeRange(seg, cls);
             if (!range) return; // this class has no privilege in this segment
             const s0 = Math.max(fMin, range[0]), s1 = Math.min(fMax, range[1]);
             if (s0 >= s1) return;
             const sx0 = x(s0), sx1 = x(s1);
             setRowFill(privilegeColor(seg, cls));
-            ctx.fillRect(sx0, padT + row * ROW_H, Math.max(1, sx1 - sx0), ROW_H);
+            ctx.fillRect(sx0, padT + row * rowH, Math.max(1, sx1 - sx0), rowH);
           });
         }
         ctx.shadowBlur = 0;
