@@ -115,6 +115,18 @@
     <span><span class="swatch" style="background:rgba(79,176,255,0.95)"></span> 60m channel</span>
     <span><span class="swatch" style="background:rgba(255,140,40,0.95)"></span> 1.25m digital</span>
   </div>
+  <div class="row" style="margin-top:8px;">
+    <div class="field" style="flex:1 1 160px;">
+      <label for="license">License level</label>
+      <select id="license">
+        <option value="">(select to show your privileges)</option>
+        <option value="Technician">Technician</option>
+        <option value="General">General</option>
+        <option value="Advanced">Advanced</option>
+        <option value="Extra">Amateur Extra</option>
+      </select>
+    </div>
+  </div>
   <div class="row" style="margin-top:10px;">
     <button id="sweepBtn" disabled>Sweep once</button>
     <button id="tuneBtn" disabled>Start live tuning</button>
@@ -146,6 +158,7 @@
   const swrMaxSel = $('swrMax');
   const hamBandsEl = $('hamBands');
   const bandLegendEl = $('bandLegend');
+  const licenseSel = $('license');
   const sweepBtn = $('sweepBtn');
   const tuneBtn = $('tuneBtn');
   const canvas = $('chart');
@@ -171,35 +184,62 @@
   // ARRL-labeled "SSB only" line item; the 1.25m orange range is the
   // 223.52-223.64 "Digital, packet" segment, the closest match to "fixed
   // digital message forwarding" in the fetched source.
+  // License-class privilege sub-ranges (47 CFR 97.301, ITU Region 2/US,
+  // stable since the 2007 restructuring) attached to the mode segments
+  // above where a class's privilege is narrower than the full segment;
+  // a class not listed in `privilege` (or a band/channel-group listed in
+  // `licensedClasses` that omits it) has no privilege there at all.
+  // NOT independently re-verified this pass -- WebFetch attempts against
+  // ecfr.gov/law.cornell.edu/arrl.org came back blocked, 404, or garbled,
+  // so this is from general knowledge rather than a freshly-checked
+  // source. Double check against your own license reference before
+  // relying on it operationally.
+  const LICENSE_CLASSES = ['Technician', 'General', 'Advanced', 'Extra'];
   const BANDS = [
-    { name: '2200m', startHz: 135700, stopHz: 137800 },
-    { name: '630m', startHz: 472000, stopHz: 479000 },
+    { name: '2200m', startHz: 135700, stopHz: 137800, licensedClasses: ['General', 'Advanced', 'Extra'] },
+    { name: '630m', startHz: 472000, stopHz: 479000, licensedClasses: ['General', 'Advanced', 'Extra'] },
     { name: '160m', startHz: 1800000, stopHz: 2000000,
-      modes: [{ startHz: 1843000, stopHz: 2000000, color: 'green' }] },
+      modes: [{ startHz: 1843000, stopHz: 2000000, color: 'green',
+                privilege: { General: [1843000, 2000000], Advanced: [1843000, 2000000], Extra: [1843000, 2000000] } }] },
     { name: '80m', startHz: 3500000, stopHz: 4000000,
-      modes: [{ startHz: 3500000, stopHz: 3600000, color: 'red' },
-              { startHz: 3600000, stopHz: 4000000, color: 'green' }] },
-    { name: '60m', channelsHz: [5332000, 5348000, 5358500, 5373000, 5405000] },
+      modes: [{ startHz: 3500000, stopHz: 3600000, color: 'red',
+                privilege: { Technician: [3525000, 3600000], General: [3525000, 3600000], Advanced: [3500000, 3600000], Extra: [3500000, 3600000] } },
+              { startHz: 3600000, stopHz: 4000000, color: 'green',
+                privilege: { General: [3800000, 4000000], Advanced: [3800000, 4000000], Extra: [3600000, 4000000] } }] },
+    { name: '60m', channelsHz: [5332000, 5348000, 5358500, 5373000, 5405000], licensedClasses: ['General', 'Advanced', 'Extra'] },
     { name: '40m', startHz: 7000000, stopHz: 7300000,
-      modes: [{ startHz: 7000000, stopHz: 7125000, color: 'red' },
-              { startHz: 7125000, stopHz: 7300000, color: 'green' }] },
+      modes: [{ startHz: 7000000, stopHz: 7125000, color: 'red',
+                privilege: { Technician: [7025000, 7125000], General: [7025000, 7125000], Advanced: [7000000, 7125000], Extra: [7000000, 7125000] } },
+              { startHz: 7125000, stopHz: 7300000, color: 'green',
+                privilege: { General: [7175000, 7300000], Advanced: [7175000, 7300000], Extra: [7125000, 7300000] } }] },
     { name: '30m', startHz: 10100000, stopHz: 10150000,
-      modes: [{ startHz: 10100000, stopHz: 10150000, color: 'red' }] },
+      modes: [{ startHz: 10100000, stopHz: 10150000, color: 'red',
+                privilege: { General: [10100000, 10150000], Advanced: [10100000, 10150000], Extra: [10100000, 10150000] } }] },
     { name: '20m', startHz: 14000000, stopHz: 14350000,
-      modes: [{ startHz: 14000000, stopHz: 14150000, color: 'red' },
-              { startHz: 14150000, stopHz: 14350000, color: 'green' }] },
+      modes: [{ startHz: 14000000, stopHz: 14150000, color: 'red',
+                privilege: { General: [14000000, 14150000], Advanced: [14000000, 14150000], Extra: [14000000, 14150000] } },
+              { startHz: 14150000, stopHz: 14350000, color: 'green',
+                privilege: { General: [14225000, 14350000], Advanced: [14225000, 14350000], Extra: [14150000, 14350000] } }] },
     { name: '17m', startHz: 18068000, stopHz: 18168000,
-      modes: [{ startHz: 18068000, stopHz: 18110000, color: 'red' },
-              { startHz: 18110000, stopHz: 18168000, color: 'green' }] },
+      modes: [{ startHz: 18068000, stopHz: 18110000, color: 'red',
+                privilege: { General: [18068000, 18110000], Advanced: [18068000, 18110000], Extra: [18068000, 18110000] } },
+              { startHz: 18110000, stopHz: 18168000, color: 'green',
+                privilege: { General: [18110000, 18168000], Advanced: [18110000, 18168000], Extra: [18110000, 18168000] } }] },
     { name: '15m', startHz: 21000000, stopHz: 21450000,
-      modes: [{ startHz: 21000000, stopHz: 21200000, color: 'red' },
-              { startHz: 21200000, stopHz: 21450000, color: 'green' }] },
+      modes: [{ startHz: 21000000, stopHz: 21200000, color: 'red',
+                privilege: { Technician: [21025000, 21200000], General: [21025000, 21200000], Advanced: [21000000, 21200000], Extra: [21000000, 21200000] } },
+              { startHz: 21200000, stopHz: 21450000, color: 'green',
+                privilege: { General: [21275000, 21450000], Advanced: [21275000, 21450000], Extra: [21200000, 21450000] } }] },
     { name: '12m', startHz: 24890000, stopHz: 24990000,
-      modes: [{ startHz: 24890000, stopHz: 24930000, color: 'red' },
-              { startHz: 24930000, stopHz: 24990000, color: 'green' }] },
+      modes: [{ startHz: 24890000, stopHz: 24930000, color: 'red',
+                privilege: { General: [24890000, 24930000], Advanced: [24890000, 24930000], Extra: [24890000, 24930000] } },
+              { startHz: 24930000, stopHz: 24990000, color: 'green',
+                privilege: { General: [24930000, 24990000], Advanced: [24930000, 24990000], Extra: [24930000, 24990000] } }] },
     { name: '10m', startHz: 28000000, stopHz: 29700000,
-      modes: [{ startHz: 28070000, stopHz: 28150000, color: 'red' },
-              { startHz: 28300000, stopHz: 29300000, color: 'green' }] },
+      modes: [{ startHz: 28070000, stopHz: 28150000, color: 'red',
+                privilege: { Technician: [28000000, 28300000], General: [28000000, 29700000], Advanced: [28000000, 29700000], Extra: [28000000, 29700000] } },
+              { startHz: 28300000, stopHz: 29300000, color: 'green',
+                privilege: { Technician: [28300000, 28500000], General: [28300000, 29700000], Advanced: [28300000, 29700000], Extra: [28300000, 29700000] } }] },
     { name: '6m', startHz: 50000000, stopHz: 54000000,
       modes: [{ startHz: 50100000, stopHz: 50300000, color: 'yellow' }] },
     { name: '2m', startHz: 144000000, stopHz: 148000000,
@@ -226,6 +266,7 @@
   swrMax = parseFloat(swrMaxSel.value);
   hamBandsEl.checked = localStorage.getItem('nvt_hambands') === '1';
   bandLegendEl.hidden = !hamBandsEl.checked;
+  licenseSel.value = localStorage.getItem('nvt_license') || '';
 
   swrMaxSel.addEventListener('change', () => {
     swrMax = parseFloat(swrMaxSel.value);
@@ -235,6 +276,11 @@
   hamBandsEl.addEventListener('change', () => {
     localStorage.setItem('nvt_hambands', hamBandsEl.checked ? '1' : '0');
     bandLegendEl.hidden = !hamBandsEl.checked;
+    drawChart(lastPoints);
+  });
+
+  licenseSel.addEventListener('change', () => {
+    localStorage.setItem('nvt_license', licenseSel.value);
     drawChart(lastPoints);
   });
 
@@ -338,6 +384,41 @@
     orange: 'rgba(255, 140, 40, 0.95)',
   };
   const MODE_STRIP_H = 5;
+
+  // Marks where the selected license class's privilege boundary sits
+  // within a mode segment, when it's narrower than the full segment (the
+  // segment's own color strip already shows the full RTTY/Data or
+  // Phone/Image range -- this adds "and here's where *you* can start").
+  function drawLicenseMarkers(fMin, fMax, x, padT, plotH, licenseClass) {
+    if (!licenseClass) return;
+    ctx.save();
+    ctx.font = 'bold 9px sans-serif';
+    const abbrev = { Technician: 'Tech', General: 'Gen', Advanced: 'Adv', Extra: 'Extra' }[licenseClass];
+    const mark = (hz) => {
+      if (hz < fMin || hz > fMax) return;
+      const mx = x(hz);
+      ctx.strokeStyle = 'rgba(230, 233, 239, 0.95)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(mx, padT);
+      ctx.lineTo(mx, padT + plotH);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(230, 233, 239, 0.95)';
+      ctx.fillText(abbrev, mx + 2, padT + plotH - 4);
+    };
+    for (const band of BANDS) {
+      if (!band.modes) continue;
+      for (const seg of band.modes) {
+        if (!seg.privilege) continue;
+        const range = seg.privilege[licenseClass];
+        if (!range) continue; // not privileged in this segment at all
+        const [ls, le] = range;
+        if (ls > seg.startHz) mark(ls);
+        if (le < seg.stopHz) mark(le);
+      }
+    }
+    ctx.restore();
+  }
 
   function drawBandOverlay(fMin, fMax, x, padT, plotH) {
     ctx.save();
@@ -443,6 +524,7 @@
 
     if (hamBandsEl.checked) {
       drawBandOverlay(fMin, fMax, x, padT, plotH);
+      drawLicenseMarkers(fMin, fMax, x, padT, plotH, licenseSel.value);
     }
 
     ctx.strokeStyle = '#4fb0ff';
