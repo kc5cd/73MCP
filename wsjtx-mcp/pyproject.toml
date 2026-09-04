@@ -1,0 +1,26 @@
+[project]
+name = "wsjtx-mcp"
+version = "0.1.0"
+description = "MCP server exposing WSJT-X's live UDP feed (status, decodes, logged QSOs)"
+requires-python = ">=3.10"
+dependencies = [
+    # Pinned to an exact version, not `>=1.0` -- an unpinned range silently
+    # resolved to a 2.x release with a renamed API and different
+    # exception-forwarding behavior partway through nanovna-mcp's build
+    # (see that branch's .claude/state/context.md). 2.1.1 is the latest
+    # release as of this pin.
+    "mcp==2.1.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
+
+[project.scripts]
+wsjtx-mcp = "wsjtx_mcp.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["wsjtx_udp*", "wsjtx_mcp*"]
