@@ -163,7 +163,16 @@ v1 scope.
 - Found and fixed live (2026-09-03): bare `uvicorn` has no WebSocket protocol backend without
   the `websockets` package — `/sweep/stream` silently 404'd instead of upgrading. Now an
   explicit dependency in `pyproject.toml`; a fresh `pip install -e .` picks it up.
-- **Still not verified against real NanoVNA hardware** — none was connected during this pass
-  (only Bluetooth/WCH serial ports present, no `0483:5740` device). Run a manual end-to-end
-  check (`/connect` → `/sweep` against real hardware, confirm the SWR curve matches the
-  known-good example above) next time one's available.
+- **Verified against real NanoVNA hardware (2026-09-04)**, first time one was available:
+  connected on `COM20`, swept 400-550MHz against a real antenna via `sweep.run_sweep()`
+  directly. **Found and fixed a real bug in the same pass**: the NanoVNA's shell echoes each
+  command back as the first line of every reply (e.g. sending `frequencies` gets a literal
+  `"frequencies"` line before the actual data) — `parse_frequency_hz`/`parse_re_im`'s
+  permissive fallback silently turned that into a bogus leading `freq_hz=0`/`s11=0` point on
+  every sweep. Fixed generically in `device.py`'s `read_until_prompt()` (drops the echoed line
+  when it matches the command just sent), not by special-casing zero frequencies. Confirmed
+  fixed against the same hardware: first point is now real data at the sweep's start
+  frequency. **Also observed**: the firmware's `sweep <start> <stop> <points>` returned
+  `2*points - 1` frequency points (11 requested → 21 returned) rather than exactly `points` —
+  not yet investigated further, doesn't affect correctness of the returned points, only the
+  count.
