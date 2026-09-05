@@ -79,6 +79,18 @@
 
 <div class="panel">
   <div class="row">
+    <div class="field" style="flex:0 1 160px;">
+      <label for="ituRegion">ITU Region</label>
+      <select id="ituRegion">
+        <option value="2">Region 2 (Americas)</option>
+        <option value="1">Region 1 (Europe/Africa/ME)</option>
+        <option value="3">Region 3 (Asia-Pacific)</option>
+      </select>
+    </div>
+    <div class="field" style="flex:0 1 140px;">
+      <label for="bandSel">Band</label>
+      <select id="bandSel"><option value="">(pick a band)</option></select>
+    </div>
     <div class="field">
       <label for="startMhz">Start MHz</label>
       <input id="startMhz" type="number" step="any" placeholder="14.000">
@@ -156,6 +168,8 @@
   const refreshBtn = $('refreshBtn');
   const connectBtn = $('connectBtn');
   const disconnectBtn = $('disconnectBtn');
+  const ituRegionSel = $('ituRegion');
+  const bandSel = $('bandSel');
   const startMhz = $('startMhz');
   const stopMhz = $('stopMhz');
   const points = $('points');
@@ -249,6 +263,57 @@
     { name: '33cm', startHz: 902000000, stopHz: 928000000 },
     { name: '23cm', startHz: 1240000000, stopHz: 1300000000 },
   ];
+
+  // Only US/ITU Region 2 band data exists so far (from bands.md) -- Region
+  // 1/3 are listed since a NanoVNA is general-purpose test gear, not US-only,
+  // but they show a placeholder rather than silently reusing US edges, since
+  // other regions' band plans genuinely differ (e.g. 40m/80m edges).
+  const BANDS_BY_REGION = { 2: BANDS };
+
+  // The [startHz, stopHz] to sweep for a "pick a band" selection -- for a
+  // channelized band (60m) this spans from the first channel's start to the
+  // last channel's stop, covering every channel in one sweep.
+  function bandRange(band) {
+    if (band.channelsHz) {
+      const first = channelRange(band.channelsHz[0]);
+      const last = channelRange(band.channelsHz[band.channelsHz.length - 1]);
+      return [first[0], last[1]];
+    }
+    return [band.startHz, band.stopHz];
+  }
+
+  function populateBandSel() {
+    const bands = BANDS_BY_REGION[ituRegionSel.value];
+    if (!bands) {
+      bandSel.innerHTML = '<option value="">(no band data for this region yet)</option>';
+      return;
+    }
+    bandSel.innerHTML = '<option value="">(pick a band)</option>';
+    bands.forEach((band, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = band.name;
+      bandSel.appendChild(opt);
+    });
+  }
+
+  ituRegionSel.value = localStorage.getItem('nvt_ituregion') || '2';
+  populateBandSel();
+
+  ituRegionSel.addEventListener('change', () => {
+    localStorage.setItem('nvt_ituregion', ituRegionSel.value);
+    populateBandSel();
+  });
+
+  bandSel.addEventListener('change', () => {
+    const bands = BANDS_BY_REGION[ituRegionSel.value];
+    if (!bands || bandSel.value === '') return;
+    const [s, e] = bandRange(bands[parseInt(bandSel.value, 10)]);
+    startMhz.value = (s / 1e6).toString();
+    stopMhz.value = (e / 1e6).toString();
+    localStorage.setItem('nvt_start', startMhz.value);
+    localStorage.setItem('nvt_stop', stopMhz.value);
+  });
 
   let swrMax = parseFloat(swrMaxSel.value); // y-axis ceiling; values above are clipped visually
   let connected = false;
