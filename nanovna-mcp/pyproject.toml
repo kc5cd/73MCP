@@ -1,0 +1,36 @@
+[project]
+name = "nanovna-api"
+version = "0.1.0"
+description = "Local network API daemon for NanoVNA antenna analyzers -- serial protocol owner for a future MCP server and companion webapp"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+    "pyserial>=3.5",
+    # WebSocket support (`/sweep/stream`) needs an ASGI websocket
+    # implementation; plain uvicorn ships none by default (only
+    # `uvicorn[standard]` pulls one in transitively) and silently 404s
+    # the endpoint instead of erroring at startup. Depend on it directly
+    # rather than relying on the `[standard]` extra, since that extra
+    # also drags in httptools/uvloop/watchfiles we don't need.
+    "websockets>=13.0",
+    # nanovna_mcp: the MCP server that consumes the daemon above over HTTP.
+    # A separate package sharing this pyproject.toml rather than a second
+    # file, since both live in the same nanovna-mcp/ folder/branch.
+    "mcp>=1.0",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
+
+[project.scripts]
+nanovna-api = "nanovna_api.__main__:main"
+nanovna-mcp = "nanovna_mcp.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["nanovna_api*", "nanovna_mcp*"]

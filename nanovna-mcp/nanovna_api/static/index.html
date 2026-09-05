@@ -1,0 +1,1198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>NanoVNA Tuner</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #12161c;
+    --panel: #1b212b;
+    --border: #2b3341;
+    --text: #e6e9ef;
+    --muted: #8b96a5;
+    --accent: #4fb0ff;
+    --good: #35d07f;
+    --warn: #f2b84b;
+    --bad: #ff5c5c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.4 -apple-system, Segoe UI, Roboto, sans-serif;
+    padding: 10px;
+  }
+  h1 { font-size: 18px; margin: 4px 0 10px; display: flex; align-items: center; gap: 10px; }
+  .pill {
+    font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .pill.connected { color: var(--good); border-color: var(--good); }
+  .pill.error { color: var(--bad); border-color: var(--bad); }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px; margin-bottom: 10px;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
+  input, select {
+    background: #0f1319; color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px; font-size: 14px; width: 100%;
+  }
+  .field { flex: 1 1 90px; min-width: 80px; }
+  select { flex: 2 1 160px; }
+  button {
+    background: #232b38; color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px 14px; font-size: 14px; cursor: pointer;
+  }
+  button:active { background: #2c3646; }
+  button.primary { background: var(--accent); color: #06131f; border-color: var(--accent); font-weight: 600; }
+  button.tuning { background: var(--good); color: #04241a; border-color: var(--good); font-weight: 600; }
+  button:disabled { opacity: 0.45; cursor: default; }
+  #chart { width: 100%; height: 260px; display: block; background: #0f1319; border-radius: 8px; }
+  .readout { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 8px; }
+  .readout .stat .v { font-size: 20px; font-weight: 700; }
+  .readout .stat .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  #log { font-size: 12px; color: var(--muted); min-height: 1.2em; margin-top: 6px; word-break: break-word; }
+  #log.error { color: var(--bad); }
+  .swatch {
+    display: inline-block; width: 10px; height: 10px; border-radius: 2px;
+    margin-right: 3px; vertical-align: -1px;
+  }
+  #bandTooltip {
+    position: fixed; pointer-events: none; z-index: 10;
+    background: #0f1319; color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: 3px 7px; font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<h1>NanoVNA Tuner <span id="statusPill" class="pill">disconnected</span></h1>
+
+<div class="panel">
+  <div class="row">
+    <select id="devices"><option value="">(refresh to list devices)</option></select>
+    <button id="refreshBtn">Refresh</button>
+    <button id="connectBtn" class="primary">Connect</button>
+    <button id="disconnectBtn" disabled>Disconnect</button>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="row">
+    <div class="field" style="flex:0 1 160px;">
+      <label for="ituRegion">ITU Region</label>
+      <select id="ituRegion">
+        <option value="2">Region 2 (Americas)</option>
+        <option value="1">Region 1 (Europe/Africa/ME)</option>
+        <option value="3">Region 3 (Asia-Pacific)</option>
+      </select>
+    </div>
+    <div class="field" style="flex:0 1 140px;">
+      <label for="bandSel">Band</label>
+      <select id="bandSel"><option value="">(pick a band)</option></select>
+    </div>
+    <div class="field">
+      <label for="startMhz">Start MHz</label>
+      <input id="startMhz" type="number" step="0.1" placeholder="14.000">
+    </div>
+    <div class="field">
+      <label for="stopMhz">Stop MHz</label>
+      <input id="stopMhz" type="number" step="0.1" placeholder="14.350">
+    </div>
+    <div class="field">
+      <label for="points">Points</label>
+      <input id="points" type="number" step="25" min="0" max="401" placeholder="101">
+    </div>
+    <div class="field">
+      <label for="swrMax">Chart max SWR</label>
+      <select id="swrMax">
+        <option value="2">2:1</option>
+        <option value="3">3:1</option>
+        <option value="5" selected>5:1</option>
+        <option value="10">10:1</option>
+        <option value="20">20:1</option>
+      </select>
+    </div>
+    <div class="field" style="flex:0 1 180px;">
+      <label for="freqMarkers">Freq markers</label>
+      <select id="freqMarkers">
+        <option value="">None</option>
+        <option value="ft8">FT8</option>
+        <option value="ft4">FT4</option>
+        <option value="js8">JS8</option>
+        <option value="calling">National Calling Freqs (QRP USA)</option>
+      </select>
+    </div>
+  </div>
+  <div class="row" style="margin-top:10px;">
+    <label style="display:flex; align-items:center; gap:6px; width:auto;">
+      <input type="checkbox" id="hamBands" style="width:auto;">
+      Highlight amateur bands
+    </label>
+    <label style="display:flex; align-items:center; gap:6px; width:auto;">
+      <input type="checkbox" id="k4hez" style="width:auto;">
+      K4HEZ Style
+    </label>
+  </div>
+  <div id="bandLegend" class="row" hidden style="margin-top:8px; font-size:11px; color:var(--muted); gap:12px;">
+    <span><span class="swatch" style="background:rgba(255,255,255,0.95); border:1px solid var(--border);"></span> CW only</span>
+    <span><span class="swatch" style="background:rgba(255,92,92,0.95)"></span> RTTY/Data</span>
+    <span><span class="swatch" style="background:rgba(60,200,120,0.95)"></span> Phone/Image</span>
+    <span><span class="swatch" style="background:rgba(235,210,70,0.95)"></span> SSB only</span>
+    <span><span class="swatch" style="background:rgba(79,176,255,0.95)"></span> 60m channel</span>
+    <span style="color:var(--text);">Rows top→bottom: Extra(E) / Advanced(A) / General(G) / Technician(T)</span>
+  </div>
+  <div class="row" style="margin-top:8px;">
+    <div class="field" style="flex:1 1 160px;">
+      <label for="license">License level</label>
+      <select id="license">
+        <option value="">All licenses</option>
+        <option value="Technician">Technician</option>
+        <option value="General">General</option>
+        <option value="Advanced">Advanced</option>
+        <option value="Extra">Amateur Extra</option>
+      </select>
+    </div>
+  </div>
+  <div class="row" style="margin-top:10px;">
+    <button id="sweepBtn" disabled>Sweep once</button>
+    <button id="tuneBtn" disabled>Start live tuning</button>
+  </div>
+</div>
+
+<div class="panel">
+  <canvas id="chart" width="800" height="260"></canvas>
+  <div id="bandTooltip" hidden></div>
+  <div class="readout">
+    <div class="stat"><div class="v" id="minSwr">--</div><div class="k">Min SWR</div></div>
+    <div class="stat"><div class="v" id="minFreq">--</div><div class="k">At frequency</div></div>
+    <div class="stat"><div class="v" id="minZ">--</div><div class="k">Impedance</div></div>
+  </div>
+</div>
+
+<div id="log"></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const statusPill = $('statusPill');
+  const devicesSel = $('devices');
+  const refreshBtn = $('refreshBtn');
+  const connectBtn = $('connectBtn');
+  const disconnectBtn = $('disconnectBtn');
+  const ituRegionSel = $('ituRegion');
+  const bandSel = $('bandSel');
+  const startMhz = $('startMhz');
+  const stopMhz = $('stopMhz');
+  const points = $('points');
+  const swrMaxSel = $('swrMax');
+  const freqMarkersSel = $('freqMarkers');
+  const hamBandsEl = $('hamBands');
+  const k4hezEl = $('k4hez');
+  const bandLegendEl = $('bandLegend');
+  const licenseSel = $('license');
+  const sweepBtn = $('sweepBtn');
+  const tuneBtn = $('tuneBtn');
+  const canvas = $('chart');
+  const ctx = canvas.getContext('2d');
+  const bandTooltipEl = $('bandTooltip');
+  const minSwrEl = $('minSwr');
+  const minFreqEl = $('minFreq');
+  const minZEl = $('minZ');
+  const logEl = $('log');
+
+  // US amateur (Part 97) band edges -- overall allocation width only, not
+  // mode/license-class sub-bands. 60m is channelized (5 discrete channels,
+  // not a continuous allocation) so it's listed by channel center frequency
+  // instead of a start/stop range; one entry is itself a [start, stop] pair
+  // rather than a bare center, for the one channel the FCC widened to a
+  // 15kHz-wide segment in 2021 (see channelRange() below).
+  // Mode sub-segments per band, colored per ARRL band-plan convention:
+  // red=RTTY/Data, green=Phone/Image, yellow=SSB-only, blue=60m (USB
+  // phone/CW/RTTY/Data, all 5 channels). Frequencies and per-class
+  // privilege sub-ranges (47 CFR 97.301) sourced 2026-09-04 from
+  // bands.md (Casey's own ARRL chart transcription) at the repo root --
+  // this supersedes the earlier general-knowledge-derived data. A band
+  // with no `modes` array at all (2200m/630m/160m/1.25m/70cm/33cm/23cm)
+  // means every mode is allowed together throughout, with no meaningful
+  // color split; a class not listed in a segment's `privilege` (or a
+  // band/channel-group listed in `licensedClasses` that omits it) has no
+  // privilege there at all.
+  const LICENSE_CLASSES = ['Technician', 'General', 'Advanced', 'Extra'];
+  const BANDS = [
+    { name: '2200m', startHz: 135700, stopHz: 137800, licensedClasses: ['General', 'Advanced', 'Extra'] },
+    { name: '630m', startHz: 472000, stopHz: 479000, licensedClasses: ['General', 'Advanced', 'Extra'] },
+    { name: '160m', startHz: 1800000, stopHz: 2000000, licensedClasses: ['General', 'Advanced', 'Extra'] },
+    { name: '80m', startHz: 3500000, stopHz: 4000000,
+      modes: [{ startHz: 3500000, stopHz: 3600000, color: 'red',
+                // Technician's 3.525-3.6MHz privilege here is CW only --
+                // General-and-up share the same slice but also get
+                // RTTY/Data, so only Technician's row is colored white.
+                privilege: { Technician: { range: [3525000, 3600000], color: 'white' }, General: [3525000, 3600000], Advanced: [3525000, 3600000], Extra: [3500000, 3600000] } },
+              { startHz: 3600000, stopHz: 4000000, color: 'green',
+                privilege: { General: [3800000, 4000000], Advanced: [3700000, 4000000], Extra: [3600000, 4000000] } }] },
+    { name: '60m', channelsHz: [5332000, 5348000, [5351500, 5366500], 5373000, 5405000], licensedClasses: ['General', 'Advanced', 'Extra'] },
+    { name: '40m', startHz: 7000000, stopHz: 7300000,
+      modes: [{ startHz: 7000000, stopHz: 7125000, color: 'red',
+                // Technician's 7.025-7.125MHz privilege here is CW only.
+                privilege: { Technician: { range: [7025000, 7125000], color: 'white' }, General: [7025000, 7125000], Advanced: [7025000, 7125000], Extra: [7000000, 7125000] } },
+              { startHz: 7125000, stopHz: 7300000, color: 'green',
+                privilege: { General: [7175000, 7300000], Advanced: [7125000, 7300000], Extra: [7125000, 7300000] } }] },
+    { name: '30m', startHz: 10100000, stopHz: 10150000,
+      modes: [{ startHz: 10100000, stopHz: 10150000, color: 'red',
+                privilege: { General: [10100000, 10150000], Advanced: [10100000, 10150000], Extra: [10100000, 10150000] } }] },
+    { name: '20m', startHz: 14000000, stopHz: 14350000,
+      modes: [{ startHz: 14000000, stopHz: 14150000, color: 'red',
+                privilege: { General: [14025000, 14150000], Advanced: [14025000, 14150000], Extra: [14000000, 14150000] } },
+              { startHz: 14150000, stopHz: 14350000, color: 'green',
+                privilege: { General: [14225000, 14350000], Advanced: [14175000, 14350000], Extra: [14150000, 14350000] } }] },
+    { name: '17m', startHz: 18068000, stopHz: 18168000,
+      modes: [{ startHz: 18068000, stopHz: 18110000, color: 'red',
+                privilege: { General: [18068000, 18110000], Advanced: [18068000, 18110000], Extra: [18068000, 18110000] } },
+              { startHz: 18110000, stopHz: 18168000, color: 'green',
+                privilege: { General: [18110000, 18168000], Advanced: [18110000, 18168000], Extra: [18110000, 18168000] } }] },
+    { name: '15m', startHz: 21000000, stopHz: 21450000,
+      modes: [{ startHz: 21000000, stopHz: 21200000, color: 'red',
+                // Technician's 21.025-21.2MHz privilege here is CW only.
+                privilege: { Technician: { range: [21025000, 21200000], color: 'white' }, General: [21025000, 21200000], Advanced: [21025000, 21200000], Extra: [21000000, 21200000] } },
+              { startHz: 21200000, stopHz: 21450000, color: 'green',
+                privilege: { General: [21275000, 21450000], Advanced: [21225000, 21450000], Extra: [21200000, 21450000] } }] },
+    { name: '12m', startHz: 24890000, stopHz: 24990000,
+      modes: [{ startHz: 24890000, stopHz: 24930000, color: 'red',
+                privilege: { General: [24890000, 24930000], Advanced: [24890000, 24930000], Extra: [24890000, 24930000] } },
+              { startHz: 24930000, stopHz: 24990000, color: 'green',
+                privilege: { General: [24930000, 24990000], Advanced: [24930000, 24990000], Extra: [24930000, 24990000] } }] },
+    // Citizens Band -- not an amateur allocation at all (bands.md's own
+    // "11M" section is blank for every class). Included so it isn't
+    // mistaken for a gap in the chart between 12m and 10m; licensedClasses:
+    // [] keeps it out of every class's licensedIntervals()/grayout.
+    { name: '11m (CB)', startHz: 26965000, stopHz: 27405000, licensedClasses: [], notAmateur: true },
+    { name: '10m', startHz: 28000000, stopHz: 29700000,
+      modes: [{ startHz: 28000000, stopHz: 28300000, color: 'red',
+                privilege: { Technician: [28000000, 28300000], General: [28000000, 29700000], Advanced: [28000000, 29700000], Extra: [28000000, 29700000] } },
+              { startHz: 28300000, stopHz: 29700000, color: 'green',
+                // Technician's 28.3-28.5MHz phone privilege is SSB only --
+                // no AM/image -- unlike General-and-up's full Phone/Image
+                // there, so it's colored yellow (SSB only), not green.
+                privilege: { Technician: { range: [28300000, 28500000], color: 'yellow' },
+                             General: [28300000, 29700000], Advanced: [28300000, 29700000], Extra: [28300000, 29700000] } }] },
+    { name: '6m', startHz: 50000000, stopHz: 54000000,
+      modes: [{ startHz: 50000000, stopHz: 50100000, color: 'white' },
+              { startHz: 50100000, stopHz: 54000000, color: 'green' }] },
+    { name: '2m', startHz: 144000000, stopHz: 148000000,
+      modes: [{ startHz: 144000000, stopHz: 144100000, color: 'white' },
+              { startHz: 144100000, stopHz: 148000000, color: 'green' }] },
+    { name: '1.25m', startHz: 222000000, stopHz: 225000000 },
+    { name: '70cm', startHz: 420000000, stopHz: 450000000 },
+    { name: '33cm', startHz: 902000000, stopHz: 928000000 },
+    { name: '23cm', startHz: 1240000000, stopHz: 1300000000 },
+  ];
+
+  // Only US/ITU Region 2 band data exists so far (from bands.md) -- Region
+  // 1/3 are listed since a NanoVNA is general-purpose test gear, not US-only,
+  // but they show a placeholder rather than silently reusing US edges, since
+  // other regions' band plans genuinely differ (e.g. 40m/80m edges).
+  const BANDS_BY_REGION = { 2: BANDS };
+
+  // Digital-mode dial frequencies and general calling frequencies, sourced
+  // 2026-09-05 from the ShackNotes project (docs/ShackNotes on this
+  // machine; not part of this repo). `*` in the source marks the
+  // primary/default dial frequency where a band lists more than one --
+  // kept in the label rather than dropped, since a secondary frequency is
+  // still a real, useful marker. "National Calling Freqs" here means the
+  // QRP Calling Frequencies (USA) table specifically (Casey's choice --
+  // ShackNotes' calling-frequencies doc has several different candidate
+  // lists: QRP USA, QRP Europe, HF Portable, 6m detail, VHF/UHF/SHF; only
+  // QRP USA covers HF fully under one coherent label).
+  const FREQ_MARKER_SETS = {
+    ft8: [
+      { hz: 1.840e6, label: '160m FT8' },
+      { hz: 3.573e6, label: '80m FT8' },
+      { hz: 5.357e6, label: '60m FT8' },
+      { hz: 7.056e6, label: '40m FT8' },
+      { hz: 7.071e6, label: '40m FT8' },
+      { hz: 7.074e6, label: '40m FT8*' },
+      { hz: 10.132e6, label: '30m FT8' },
+      { hz: 10.133e6, label: '30m FT8' },
+      { hz: 10.136e6, label: '30m FT8*' },
+      { hz: 14.071e6, label: '20m FT8' },
+      { hz: 14.074e6, label: '20m FT8*' },
+      { hz: 14.090e6, label: '20m FT8' },
+      { hz: 18.100e6, label: '17m FT8' },
+      { hz: 21.074e6, label: '15m FT8*' },
+      { hz: 21.091e6, label: '15m FT8' },
+      { hz: 24.915e6, label: '12m FT8' },
+      { hz: 28.074e6, label: '10m FT8' },
+      { hz: 50.310e6, label: '6m FT8' },
+      { hz: 50.313e6, label: '6m FT8*' },
+      { hz: 50.323e6, label: '6m FT8' },
+      { hz: 70.100e6, label: '4m FT8' },
+      { hz: 70.154e6, label: '4m FT8' },
+      { hz: 144.174e6, label: '2m FT8' },
+      { hz: 222.065e6, label: '1.25m FT8' },
+      { hz: 432.065e6, label: '70cm FT8*' },
+      { hz: 432.174e6, label: '70cm FT8' },
+      { hz: 1296.174e6, label: '23cm FT8' },
+    ],
+    ft4: [
+      { hz: 3.575e6, label: '80m FT4' },
+      { hz: 7.0475e6, label: '40m FT4' },
+      { hz: 10.140e6, label: '30m FT4' },
+      { hz: 14.080e6, label: '20m FT4' },
+      { hz: 18.104e6, label: '17m FT4' },
+      { hz: 21.140e6, label: '15m FT4' },
+      { hz: 24.919e6, label: '12m FT4' },
+      { hz: 28.180e6, label: '10m FT4' },
+      { hz: 50.318e6, label: '6m FT4' },
+      { hz: 144.170e6, label: '2m FT4' },
+    ],
+    js8: [
+      { hz: 1.842e6, label: '160m JS8' },
+      { hz: 3.578e6, label: '80m JS8' },
+      { hz: 7.078e6, label: '40m JS8' },
+      { hz: 10.130e6, label: '30m JS8' },
+      { hz: 14.078e6, label: '20m JS8' },
+      { hz: 18.104e6, label: '17m JS8' },
+      { hz: 21.078e6, label: '15m JS8' },
+      { hz: 24.922e6, label: '12m JS8' },
+      { hz: 27.245e6, label: '11m JS8' },
+      { hz: 28.078e6, label: '10m JS8' },
+      { hz: 50.318e6, label: '6m JS8' },
+    ],
+    calling: [
+      { hz: 1.810e6, label: '160m CW QRP' },
+      { hz: 1.910e6, label: '160m SSB QRP' },
+      { hz: 3.560e6, label: '80m CW QRP' },
+      { hz: 3.985e6, label: '80m SSB QRP' },
+      { hz: 3.579e6, label: '80m CW (Colorburst)' },
+      { hz: 3.710e6, label: '80m CW (Novice)' },
+      { hz: 7.040e6, label: '40m CW QRP / RTTY DX' },
+      { hz: 7.285e6, label: '40m SSB QRP' },
+      { hz: 7.035e6, label: '40m CW (QRP-L)' },
+      { hz: 7.110e6, label: '40m CW (Novice)' },
+      { hz: 7.112e6, label: '40m CW (NorCal)' },
+      { hz: 10.106e6, label: '30m CW QRP' },
+      { hz: 10.116e6, label: '30m CW (QRP-L)' },
+      { hz: 14.060e6, label: '20m CW QRP' },
+      { hz: 14.285e6, label: '20m SSB QRP' },
+      { hz: 18.096e6, label: '17m CW QRP' },
+      { hz: 18.130e6, label: '17m SSB QRP' },
+      { hz: 21.060e6, label: '15m CW QRP' },
+      { hz: 21.385e6, label: '15m SSB QRP' },
+      { hz: 21.110e6, label: '15m CW (Novice)' },
+      { hz: 24.906e6, label: '12m CW QRP' },
+      { hz: 24.950e6, label: '12m SSB QRP' },
+      { hz: 28.060e6, label: '10m CW QRP' },
+      { hz: 28.885e6, label: '10m SSB QRP' },
+      { hz: 28.110e6, label: '10m CW (Novice)' },
+      { hz: 28.385e6, label: '10m SSB (Novice)' },
+      { hz: 50.060e6, label: '6m CW QRP' },
+      { hz: 50.885e6, label: '6m SSB QRP' },
+      { hz: 144.060e6, label: '2m CW QRP' },
+      { hz: 144.285e6, label: '2m SSB QRP' },
+      { hz: 144.585e6, label: '2m FM QRP' },
+    ],
+  };
+
+  // The [startHz, stopHz] to sweep for a "pick a band" selection -- for a
+  // channelized band (60m) this spans from the first channel's start to the
+  // last channel's stop, covering every channel in one sweep.
+  function bandRange(band) {
+    if (band.channelsHz) {
+      const first = channelRange(band.channelsHz[0]);
+      const last = channelRange(band.channelsHz[band.channelsHz.length - 1]);
+      return [first[0], last[1]];
+    }
+    return [band.startHz, band.stopHz];
+  }
+
+  function populateBandSel() {
+    const bands = BANDS_BY_REGION[ituRegionSel.value];
+    if (!bands) {
+      bandSel.innerHTML = '<option value="">(no band data for this region yet)</option>';
+      return;
+    }
+    bandSel.innerHTML = '<option value="">(pick a band)</option>';
+    bands.forEach((band, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = band.name;
+      bandSel.appendChild(opt);
+    });
+  }
+
+  ituRegionSel.value = localStorage.getItem('nvt_ituregion') || '2';
+  populateBandSel();
+
+  ituRegionSel.addEventListener('change', () => {
+    localStorage.setItem('nvt_ituregion', ituRegionSel.value);
+    populateBandSel();
+  });
+
+  bandSel.addEventListener('change', () => {
+    const bands = BANDS_BY_REGION[ituRegionSel.value];
+    if (!bands || bandSel.value === '') return;
+    const [s, e] = bandRange(bands[parseInt(bandSel.value, 10)]);
+    // Pad 0.05MHz past each edge so the sweep shows a bit of the skirts
+    // outside the band, not just the exact allocation boundary.
+    const PAD_HZ = 50000;
+    startMhz.value = (Math.max(1000, s - PAD_HZ) / 1e6).toString();
+    stopMhz.value = ((e + PAD_HZ) / 1e6).toString();
+    localStorage.setItem('nvt_start', startMhz.value);
+    localStorage.setItem('nvt_stop', stopMhz.value);
+  });
+
+  let swrMax = parseFloat(swrMaxSel.value); // y-axis ceiling; values above are clipped visually
+  let connected = false;
+  let tuning = false;
+  let ws = null;
+  let lastPoints = [];
+  let k4hezAnimHandle = null;
+  // Rebuilt on every drawBandOverlay() call: the on-screen rect + license
+  // class of each privilege bar currently drawn, for the hover tooltip.
+  let hoverBars = [];
+
+  // Remember last-used sweep params across reloads (field convenience).
+  for (const [el, key] of [[startMhz, 'nvt_start'], [stopMhz, 'nvt_stop'], [points, 'nvt_points'], [swrMaxSel, 'nvt_swrmax']]) {
+    const saved = localStorage.getItem(key);
+    if (saved) el.value = saved;
+    el.addEventListener('change', () => localStorage.setItem(key, el.value));
+  }
+  swrMax = parseFloat(swrMaxSel.value);
+  hamBandsEl.checked = localStorage.getItem('nvt_hambands') === '1';
+  bandLegendEl.hidden = !hamBandsEl.checked;
+  licenseSel.value = localStorage.getItem('nvt_license') || '';
+  k4hezEl.checked = localStorage.getItem('nvt_k4hez') === '1';
+  freqMarkersSel.value = localStorage.getItem('nvt_freqmarkers') || '';
+
+  swrMaxSel.addEventListener('change', () => {
+    swrMax = parseFloat(swrMaxSel.value);
+    drawChart(lastPoints);
+  });
+
+  hamBandsEl.addEventListener('change', () => {
+    localStorage.setItem('nvt_hambands', hamBandsEl.checked ? '1' : '0');
+    bandLegendEl.hidden = !hamBandsEl.checked;
+    drawChart(lastPoints);
+    ensureK4hezAnimation();
+  });
+
+  k4hezEl.addEventListener('change', () => {
+    localStorage.setItem('nvt_k4hez', k4hezEl.checked ? '1' : '0');
+    drawChart(lastPoints);
+    ensureK4hezAnimation();
+  });
+
+  licenseSel.addEventListener('change', () => {
+    localStorage.setItem('nvt_license', licenseSel.value);
+    drawChart(lastPoints);
+  });
+
+  freqMarkersSel.addEventListener('change', () => {
+    localStorage.setItem('nvt_freqmarkers', freqMarkersSel.value);
+    drawChart(lastPoints);
+  });
+
+  // Hover tooltip over a privilege bar names the license class it belongs
+  // to -- offsetX/offsetY are already in the same CSS-pixel coordinate
+  // space drawBandOverlay() draws in, so no devicePixelRatio conversion
+  // is needed to hit-test against hoverBars.
+  canvas.addEventListener('mousemove', (e) => {
+    const hit = hoverBars.find((b) => e.offsetX >= b.x0 && e.offsetX <= b.x1 && e.offsetY >= b.y0 && e.offsetY <= b.y1);
+    if (!hit) {
+      bandTooltipEl.hidden = true;
+      return;
+    }
+    bandTooltipEl.hidden = false;
+    bandTooltipEl.textContent = hit.label;
+    bandTooltipEl.style.left = (e.clientX + 12) + 'px';
+    bandTooltipEl.style.top = (e.clientY + 12) + 'px';
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    bandTooltipEl.hidden = true;
+  });
+
+  function log(msg, isError) {
+    logEl.textContent = msg;
+    logEl.className = isError ? 'error' : '';
+  }
+
+  function setConnected(isConnected, portName) {
+    connected = isConnected;
+    statusPill.textContent = isConnected ? `connected: ${portName}` : 'disconnected';
+    statusPill.className = 'pill' + (isConnected ? ' connected' : '');
+    connectBtn.disabled = isConnected;
+    disconnectBtn.disabled = !isConnected;
+    sweepBtn.disabled = !isConnected || tuning;
+    tuneBtn.disabled = !isConnected;
+  }
+
+  async function api(path, opts) {
+    const res = await fetch(path, opts);
+    if (!res.ok) {
+      let detail = res.statusText;
+      try { detail = (await res.json()).detail || detail; } catch (_) {}
+      throw new Error(`${path}: ${detail}`);
+    }
+    return res.json();
+  }
+
+  async function refreshDevices() {
+    try {
+      const data = await api('/devices');
+      devicesSel.innerHTML = '';
+      if (!data.devices.length) {
+        devicesSel.innerHTML = '<option value="">(no devices found)</option>';
+      }
+      for (const d of data.devices) {
+        const opt = document.createElement('option');
+        opt.value = d;
+        opt.textContent = d;
+        devicesSel.appendChild(opt);
+      }
+      log(`found ${data.devices.length} device(s)`);
+    } catch (e) {
+      log(e.message, true);
+    }
+  }
+
+  async function refreshStatus() {
+    try {
+      const s = await api('/status');
+      setConnected(s.connected, s.port);
+    } catch (e) {
+      log(e.message, true);
+    }
+  }
+
+  connectBtn.addEventListener('click', async () => {
+    const port = devicesSel.value;
+    if (!port) { log('pick a device first', true); return; }
+    try {
+      const s = await api('/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ port }),
+      });
+      setConnected(true, s.port);
+      log(`connected to ${s.port}`);
+    } catch (e) {
+      log(e.message, true);
+    }
+  });
+
+  disconnectBtn.addEventListener('click', async () => {
+    tuning = false;
+    if (ws) { try { ws.close(); } catch (_) {} }
+    try {
+      await api('/disconnect', { method: 'POST' });
+    } catch (e) {
+      log(e.message, true);
+    }
+    setConnected(false);
+  });
+
+  refreshBtn.addEventListener('click', refreshDevices);
+
+  function sweepParams() {
+    const start = parseFloat(startMhz.value);
+    const stop = parseFloat(stopMhz.value);
+    const n = parseInt(points.value, 10) || 101;
+    if (!isFinite(start) || !isFinite(stop) || stop <= start) {
+      throw new Error('enter a valid Start/Stop MHz range');
+    }
+    return { start_hz: Math.round(start * 1e6), stop_hz: Math.round(stop * 1e6), points: Math.max(2, n) };
+  }
+
+  const MODE_COLORS = {
+    red: 'rgba(255, 92, 92, 0.95)',
+    green: 'rgba(60, 200, 120, 0.95)',
+    yellow: 'rgba(235, 210, 70, 0.95)',
+    blue: 'rgba(79, 176, 255, 0.95)',
+    white: 'rgba(255, 255, 255, 0.95)',
+  };
+  // Same hues as MODE_COLORS but as bare "r, g, b" triples, for building a
+  // flicker-modulated rgba() string in K4HEZ Style.
+  const MODE_RGB = {
+    red: '255, 92, 92',
+    green: '60, 200, 120',
+    yellow: '235, 210, 70',
+    blue: '79, 176, 255',
+    white: '255, 255, 255',
+  };
+  // Stacked per-class rows, ARRL-chart style: top-to-bottom Extra/Advanced/
+  // General/Technician, each row showing only the sub-range that class can
+  // actually use -- not one bar plus a boundary marker.
+  const LICENSE_ROWS = ['Extra', 'Advanced', 'General', 'Technician'];
+  const ROW_INITIAL = { Extra: 'E', Advanced: 'A', General: 'G', Technician: 'T' };
+  const ROW_H = 8;
+  const MODE_STRIP_H = LICENSE_ROWS.length * ROW_H;
+
+  // A privilege[class] entry is normally just [startHz, stopHz] (use the
+  // segment's own color). Sometimes a class's privilege is the *same mode
+  // family* but a stricter one -- e.g. Technician's 10m phone privilege is
+  // SSB only, not the full Phone/Image General-and-up get, even though
+  // it's the same 28.3-28.5MHz slice of the same green segment. For that,
+  // an entry can instead be { range: [startHz, stopHz], color: 'yellow' }
+  // to override just that class's row color.
+  function normalizePrivilege(entry) {
+    if (!entry) return null;
+    return Array.isArray(entry) ? { range: entry, color: null } : { range: entry.range, color: entry.color || null };
+  }
+
+  // The [startHz, stopHz] a given class may use within one mode segment (or
+  // one channel-group band), or null if that class has no privilege there
+  // at all. No `privilege` field on a segment/band means every class
+  // (Technician included) has the full range -- true for 6m/2m/1.25m/70cm
+  // and up, where there's no license-class sub-band split.
+  function privilegeRange(seg, licenseClass) {
+    if (!seg.privilege) return [seg.startHz, seg.stopHz];
+    const p = normalizePrivilege(seg.privilege[licenseClass]);
+    return p ? p.range : null;
+  }
+
+  // The color to draw for a given class's row within this segment --
+  // usually the segment's own color, unless that class's privilege entry
+  // overrides it (see normalizePrivilege above).
+  function privilegeColor(seg, licenseClass) {
+    if (seg.privilege) {
+      const p = normalizePrivilege(seg.privilege[licenseClass]);
+      if (p && p.color) return p.color;
+    }
+    return seg.color;
+  }
+
+  // Whether a class has any privilege at all in this band -- across every
+  // mode segment, not just one -- used to skip that class's row-initial
+  // label entirely rather than labeling a row that's empty everywhere in
+  // the band (e.g. 30m has no Technician privilege anywhere in it).
+  function bandHasPrivilege(band, licenseClass) {
+    if (!band.modes) return true;
+    return band.modes.some((seg) => privilegeRange(seg, licenseClass) !== null);
+  }
+
+  // A 60m channelsHz entry is normally a bare center frequency (2.8kHz-wide
+  // channel implied); the one channel the FCC widened in 2021 is instead
+  // stored as an explicit [startHz, stopHz] pair.
+  function channelRange(ch) {
+    if (Array.isArray(ch)) return ch;
+    const half = 1400;
+    return [ch - half, ch + half];
+  }
+
+  // Every [startHz, stopHz] range the given license class may transmit in,
+  // across all bands this app knows about -- used to gray out the rest of
+  // a sweep. A band with no `modes` and no `licensedClasses` is open to
+  // every class (6m/2m/1.25m-non-digital/70cm/33cm/23cm); a `modes` segment
+  // with no `privilege` field is likewise unrestricted (e.g. 17m/12m,
+  // General-and-above open equally, so no per-class privilege was needed
+  // there -- but Technician still has no access, handled by `licensedClasses`
+  // being absent meaning "whoever holds any of these `modes` privileges").
+  function licensedIntervals(licenseClass) {
+    const out = [];
+    for (const band of BANDS) {
+      if (band.channelsHz) {
+        if (!band.licensedClasses || band.licensedClasses.includes(licenseClass)) {
+          for (const ch of band.channelsHz) out.push(channelRange(ch));
+        }
+        continue;
+      }
+      if (band.licensedClasses) {
+        if (band.licensedClasses.includes(licenseClass)) out.push([band.startHz, band.stopHz]);
+        continue;
+      }
+      if (band.modes) {
+        for (const seg of band.modes) {
+          if (seg.privilege) {
+            const p = normalizePrivilege(seg.privilege[licenseClass]);
+            if (p) out.push(p.range);
+          } else {
+            out.push([seg.startHz, seg.stopHz]);
+          }
+        }
+        continue;
+      }
+      out.push([band.startHz, band.stopHz]);
+    }
+    return out.sort((a, b) => a[0] - b[0]);
+  }
+
+  // Gaps in [fMin, fMax] not covered by any licensed interval -- includes
+  // both license-restricted sub-bands and frequencies outside any amateur
+  // allocation at all (neither is usable, so both get grayed the same way).
+  // Exception: a `notAmateur` band (11m/CB) already renders its own "not
+  // allowed" marking, so it's excluded here too -- it shouldn't also dim
+  // like an ordinary out-of-privilege gap, for any license class.
+  function unlicensedRanges(fMin, fMax, licenseClass) {
+    const covered = licensedIntervals(licenseClass)
+      .concat(BANDS.filter((b) => b.notAmateur).map((b) => [b.startHz, b.stopHz]))
+      .sort((a, b) => a[0] - b[0]);
+    const merged = [];
+    for (const [s, e] of covered) {
+      if (e <= fMin || s >= fMax) continue;
+      const cs = Math.max(s, fMin), ce = Math.min(e, fMax);
+      if (merged.length && cs <= merged[merged.length - 1][1]) {
+        merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], ce);
+      } else {
+        merged.push([cs, ce]);
+      }
+    }
+    const gaps = [];
+    let cursor = fMin;
+    for (const [s, e] of merged) {
+      if (s > cursor) gaps.push([cursor, s]);
+      cursor = Math.max(cursor, e);
+    }
+    if (cursor < fMax) gaps.push([cursor, fMax]);
+    return gaps;
+  }
+
+  // A neon tube's brightness isn't steady: a slow "breathing" pulse from
+  // the ballast, plus occasional quick dips when it's about to need a
+  // re-strike. Purely time-based (no stored random state) so every frame
+  // is reproducible from performance.now() alone.
+  // `phase`/`speed` let a second light run the same fade shape on its own
+  // clock (different tube, different ballast) rather than in lockstep.
+  function neonFlicker(t, phase = 0, speed = 1) {
+    const tt = t * speed + phase;
+    const breathe = 0.5 + 0.18 * Math.sin(tt / 850);
+    const chaos = Math.sin(tt / 61) * Math.sin(tt / 139) * Math.sin(tt / 47);
+    const dip = chaos > 0.9 ? 0.675 : 1; // half as deep a dip as before
+    return Math.max(0.12, Math.min(0.8, breathe * dip));
+  }
+  const ROW_FLICKER_PHASE = 4231; // arbitrary offset so rows and band labels don't sync up
+  const ROW_FLICKER_SPEED = 1.37;
+
+  // Large, faint band-name text centered in the band's own region, sized
+  // to fill most of the chart height -- a watermark identifying the band
+  // at a glance, sitting behind the mode-color rows rather than a small
+  // corner label competing with them for space.
+  function drawBandWatermark(name, x0, x1, padT, plotH, subduedColor) {
+    const maxWidth = (x1 - x0) * 0.85;
+    const maxHeight = plotH * 0.8;
+    if (maxWidth < 10 || maxHeight < 10) return;
+    ctx.save();
+    const refSize = 100;
+    ctx.font = `bold ${refSize}px sans-serif`;
+    const refWidth = ctx.measureText(name).width;
+    const fontSize = Math.max(0, Math.min(maxHeight, refSize * (maxWidth / refWidth)));
+    if (fontSize >= 10) {
+      ctx.font = `bold ${fontSize}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      if (k4hezEl.checked) {
+        const a = neonFlicker(performance.now());
+        ctx.fillStyle = `rgba(255, 16, 240, ${a.toFixed(3)})`;
+        ctx.shadowColor = '#ff10f0';
+        ctx.shadowBlur = Math.max(6, fontSize * 0.12 * (0.6 + a));
+      } else {
+        ctx.fillStyle = subduedColor || 'rgba(255, 255, 255, 0.06)';
+      }
+      ctx.fillText(name, (x0 + x1) / 2, padT + plotH / 2 + 10);
+    }
+    ctx.restore();
+  }
+
+  function drawBandOverlay(fMin, fMax, x, padT, plotH) {
+    ctx.save();
+    ctx.font = '9px sans-serif';
+    hoverBars = [];
+
+    // Mode-color rows glow too in K4HEZ Style, on their own flicker clock
+    // (ROW_FLICKER_PHASE/SPEED) so they don't pulse in lockstep with the
+    // band-name watermarks. Computed once per frame, not per row, so every
+    // bar shares one "tube".
+    const rowGlow = k4hezEl.checked ? neonFlicker(performance.now(), ROW_FLICKER_PHASE, ROW_FLICKER_SPEED) : null;
+    const setRowFill = (colorName) => {
+      if (rowGlow !== null) {
+        ctx.shadowColor = `rgb(${MODE_RGB[colorName]})`;
+        ctx.shadowBlur = 3 + rowGlow * 5;
+        ctx.fillStyle = `rgba(${MODE_RGB[colorName]}, ${rowGlow.toFixed(3)})`;
+      } else {
+        ctx.fillStyle = MODE_COLORS[colorName];
+      }
+    };
+    // A thin outline on every privilege bar so adjacent same-height rows
+    // (e.g. two classes sharing a color) are still visually separated.
+    // Drawn with the glow turned off -- K4HEZ Style's shadowBlur would
+    // otherwise bleed a colored halo into what should be a crisp border.
+    const strokeBar = (bx, by, bw, bh) => {
+      ctx.save();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx + 0.5, by + 0.5, Math.max(0, bw - 1), Math.max(0, bh - 1));
+      ctx.restore();
+    };
+
+    // "All licenses" (blank selection) stacks all 4 classes as thin rows,
+    // same as before. Picking one class instead shows only that class's
+    // privileges, expanded to fill the whole strip height rather than a
+    // sliver.
+    const selectedClass = licenseSel.value;
+    const rows = selectedClass ? [selectedClass] : LICENSE_ROWS;
+    const rowH = selectedClass ? MODE_STRIP_H : ROW_H;
+
+    for (const band of BANDS) {
+      if (band.channelsHz) {
+        // Channelized band (60m): most channels are only 2.8kHz wide, which
+        // rounds to sub-pixel (invisible) at typical HF sweep spans -- so
+        // each channel's shaded background is drawn with a floored minimum
+        // pixel width, centered on the true channel edges, with a dashed
+        // line marking the exact center on top.
+        const MIN_PX = 5;
+        for (const [i, ch] of band.channelsHz.entries()) {
+          const [chStartHz, chStopHz] = channelRange(ch);
+          if (chStopHz < fMin || chStartHz > fMax) continue;
+          const cx = x((chStartHz + chStopHz) / 2);
+          const chStart = Math.max(fMin, chStartHz);
+          const chStop = Math.min(fMax, chStopHz);
+          let rx0 = chStart < chStop ? x(chStart) : cx;
+          let rx1 = chStart < chStop ? x(chStop) : cx;
+          if (rx1 - rx0 < MIN_PX) {
+            rx0 = cx - MIN_PX / 2;
+            rx1 = cx + MIN_PX / 2;
+          }
+          ctx.fillStyle = 'rgba(79, 176, 255, 0.22)';
+          ctx.fillRect(rx0, padT, rx1 - rx0, plotH);
+
+          rows.forEach((cls, row) => {
+            if (band.licensedClasses && !band.licensedClasses.includes(cls)) return;
+            setRowFill('blue');
+            const by = padT + row * rowH;
+            ctx.fillRect(rx0, by, rx1 - rx0, rowH);
+            strokeBar(rx0, by, rx1 - rx0, rowH);
+            hoverBars.push({ x0: rx0, x1: rx1, y0: by, y1: by + rowH, label: cls });
+          });
+          ctx.shadowBlur = 0;
+
+          ctx.strokeStyle = 'rgba(242, 184, 75, 0.85)';
+          ctx.setLineDash([3, 2]);
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(cx, padT);
+          ctx.lineTo(cx, padT + plotH);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.fillStyle = 'rgba(242, 184, 75, 0.9)';
+          ctx.fillText(`${band.name} ch${i + 1}`, cx + 2, padT + 9);
+        }
+        continue;
+      }
+      const start = Math.max(fMin, band.startHz);
+      const stop = Math.min(fMax, band.stopHz);
+      if (start >= stop) continue;
+      const x0 = x(start), x1 = x(stop);
+      ctx.fillStyle = 'rgba(79, 176, 255, 0.12)';
+      ctx.fillRect(x0, padT, Math.max(1, x1 - x0), plotH);
+
+      drawBandWatermark(band.name, x0, x1, padT, plotH, band.notAmateur ? 'rgba(255, 90, 90, 0.14)' : null);
+
+      if (band.notAmateur) {
+        // No license grants any privilege here at all (e.g. 11m/CB) -- a
+        // flat black bar across the whole privilege-row strip, with the
+        // label allowed to overflow past the bar's own width rather than
+        // being clipped, since the band itself is often only a handful of
+        // pixels wide at typical HF sweep spans.
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(x0, padT, Math.max(1, x1 - x0), MODE_STRIP_H);
+        ctx.font = '18px sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Not Allowed With Amateur Radio Equipment', (x0 + x1) / 2, padT + MODE_STRIP_H / 2);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+
+        // Extra doesn't get a pass here either -- called out specifically
+        // since Extra is used to having the widest privileges everywhere
+        // else on the chart.
+        if (licenseSel.value === 'Extra') {
+          ctx.font = '18px sans-serif';
+          ctx.fillStyle = '#FF00FF';
+          ctx.textAlign = 'center';
+          ctx.fillText('Even you cannot transmit here', (x0 + x1) / 2, padT + plotH - 11);
+          ctx.textAlign = 'left';
+        }
+      } else if (band.modes) {
+        for (const seg of band.modes) {
+          rows.forEach((cls, row) => {
+            const range = privilegeRange(seg, cls);
+            if (!range) return; // this class has no privilege in this segment
+            const s0 = Math.max(fMin, range[0]), s1 = Math.min(fMax, range[1]);
+            if (s0 >= s1) return;
+            const sx0 = x(s0), sx1 = x(s1);
+            setRowFill(privilegeColor(seg, cls));
+            const w = Math.max(1, sx1 - sx0);
+            const by = padT + row * rowH;
+            ctx.fillRect(sx0, by, w, rowH);
+            strokeBar(sx0, by, w, rowH);
+            hoverBars.push({ x0: sx0, x1: sx0 + w, y0: by, y1: by + rowH, label: cls });
+          });
+        }
+        ctx.shadowBlur = 0;
+
+        // In the stacked "All licenses" view, label each row with its
+        // class initial just outside both edges of the band -- not
+        // overlapping the band's own color -- so it's clear which row is
+        // whose privileges without checking the legend. Skipped for a
+        // class with zero privilege anywhere in this band (e.g. 30m's
+        // Technician row) -- labeling an always-empty row just looks like
+        // a mistake rather than "nothing here for you".
+        if (!selectedClass) {
+          const LABEL_GAP = 5;
+          ctx.font = '8px sans-serif';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+          LICENSE_ROWS.forEach((cls, row) => {
+            if (!bandHasPrivilege(band, cls)) return;
+            const cy = padT + row * ROW_H + ROW_H / 2;
+            const initial = ROW_INITIAL[cls];
+            ctx.textAlign = 'right';
+            ctx.fillText(initial, x0 - LABEL_GAP, cy);
+            ctx.textAlign = 'left';
+            ctx.fillText(initial, x1 + LABEL_GAP, cy);
+          });
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'alphabetic';
+          ctx.font = '9px sans-serif';
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  // Thin dashed vertical line + sideways label per marker frequency inside
+  // the current sweep range. Text runs top-to-bottom (rotated 90°) rather
+  // than horizontal so closely-spaced markers (e.g. 40m's three FT8
+  // frequencies) don't overlap each other.
+  function drawFreqMarkers(fMin, fMax, x, padT, plotH) {
+    const set = FREQ_MARKER_SETS[freqMarkersSel.value];
+    if (!set) return;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 209, 102, 0.55)';
+    ctx.fillStyle = 'rgba(255, 209, 102, 0.9)';
+    ctx.font = '9px sans-serif';
+    ctx.setLineDash([3, 3]);
+    ctx.lineWidth = 1;
+    for (const m of set) {
+      if (m.hz < fMin || m.hz > fMax) continue;
+      const mx = x(m.hz);
+      ctx.beginPath();
+      ctx.moveTo(mx, padT);
+      ctx.lineTo(mx, padT + plotH);
+      ctx.stroke();
+      ctx.save();
+      ctx.translate(mx + 2, padT + 2);
+      ctx.rotate(Math.PI / 2);
+      ctx.textBaseline = 'top';
+      ctx.fillText(m.label, 0, 0);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function drawChart(pts) {
+    lastPoints = pts;
+    const w = canvas.clientWidth || canvas.width;
+    const h = canvas.clientHeight || canvas.height;
+    canvas.width = w * devicePixelRatio;
+    canvas.height = h * devicePixelRatio;
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    const padL = 34, padR = 8, padT = 10, padB = 20;
+    const plotW = w - padL - padR, plotH = h - padT - padB;
+
+    ctx.strokeStyle = '#2b3341';
+    ctx.fillStyle = '#8b96a5';
+    ctx.font = '10px sans-serif';
+    ctx.lineWidth = 1;
+    const tickCount = 5;
+    for (let i = 0; i < tickCount; i++) {
+      const swr = 1 + (swrMax - 1) * i / (tickCount - 1);
+      const y = padT + plotH * (1 - (swr - 1) / (swrMax - 1));
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(w - padR, y);
+      ctx.stroke();
+      ctx.fillText(swr.toFixed(swrMax > 10 ? 0 : 1), 2, y + 3);
+    }
+
+    if (!pts.length) {
+      hoverBars = [];
+      return;
+    }
+
+    const freqs = pts.map((p) => p.freq_hz);
+    const fMin = Math.min(...freqs), fMax = Math.max(...freqs);
+    const x = (f) => padL + plotW * (fMax > fMin ? (f - fMin) / (fMax - fMin) : 0.5);
+    const y = (swr) => padT + plotH * (1 - (Math.min(swr, swrMax) - 1) / (swrMax - 1));
+
+    if (hamBandsEl.checked) {
+      drawBandOverlay(fMin, fMax, x, padT, plotH);
+    } else {
+      hoverBars = [];
+    }
+
+    // Colored per segment by SWR rather than one flat trace color -- a
+    // segment counts as "bad" (red) if either endpoint is above 3:1, so a
+    // crossing point always lands on the red side rather than looking
+    // falsely clean.
+    const SWR_BAD_THRESHOLD = 3;
+    ctx.lineWidth = 2;
+    for (let i = 1; i < pts.length; i++) {
+      const p0 = pts[i - 1], p1 = pts[i];
+      ctx.strokeStyle = (p0.swr > SWR_BAD_THRESHOLD || p1.swr > SWR_BAD_THRESHOLD) ? '#ff5c5c' : '#35d07f';
+      ctx.beginPath();
+      ctx.moveTo(x(p0.freq_hz), y(p0.swr));
+      ctx.lineTo(x(p1.freq_hz), y(p1.swr));
+      ctx.stroke();
+    }
+
+    drawFreqMarkers(fMin, fMax, x, padT, plotH);
+
+    ctx.fillStyle = '#8b96a5';
+    ctx.fillText((fMin / 1e6).toFixed(3) + ' MHz', padL, h - 6);
+    const maxLabel = (fMax / 1e6).toFixed(3) + ' MHz';
+    ctx.fillText(maxLabel, w - padR - ctx.measureText(maxLabel).width, h - 6);
+
+    let best = pts[0];
+    for (const p of pts) if (p.swr < best.swr) best = p;
+    const bx = x(best.freq_hz), by = y(best.swr);
+    ctx.fillStyle = '#35d07f';
+    ctx.beginPath();
+    ctx.arc(bx, by, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (licenseSel.value) {
+      ctx.fillStyle = 'rgba(8, 10, 14, 0.6)';
+      for (const [gs, ge] of unlicensedRanges(fMin, fMax, licenseSel.value)) {
+        const gx0 = x(gs), gx1 = x(ge);
+        ctx.fillRect(gx0, padT, Math.max(0, gx1 - gx0), plotH);
+      }
+    }
+
+    minSwrEl.textContent = best.swr.toFixed(2) + ':1';
+    minFreqEl.textContent = (best.freq_hz / 1e6).toFixed(4) + ' MHz';
+    minZEl.textContent = best.impedance
+      ? `${best.impedance.r.toFixed(1)} ${best.impedance.x >= 0 ? '+' : '-'} j${Math.abs(best.impedance.x).toFixed(1)} Ω`
+      : '--';
+  }
+
+  // Redraws on every animation frame purely to animate the neon flicker --
+  // stops itself the moment K4HEZ Style, band highlighting, or the sweep
+  // data goes away, rather than running an idle rAF loop forever.
+  function k4hezTick() {
+    k4hezAnimHandle = null;
+    if (!k4hezEl.checked || !hamBandsEl.checked || !lastPoints.length) return;
+    drawChart(lastPoints);
+    k4hezAnimHandle = requestAnimationFrame(k4hezTick);
+  }
+
+  function ensureK4hezAnimation() {
+    if (k4hezEl.checked && hamBandsEl.checked && lastPoints.length && k4hezAnimHandle === null) {
+      k4hezAnimHandle = requestAnimationFrame(k4hezTick);
+    }
+  }
+
+  async function sweepOnceRest() {
+    const params = sweepParams();
+    const data = await api('/sweep', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    drawChart(data.points);
+  }
+
+  sweepBtn.addEventListener('click', async () => {
+    sweepBtn.disabled = true;
+    try {
+      log('sweeping...');
+      await sweepOnceRest();
+      log('sweep complete');
+      ensureK4hezAnimation();
+    } catch (e) {
+      log(e.message, true);
+    } finally {
+      sweepBtn.disabled = !connected || tuning;
+    }
+  });
+
+  function proto() {
+    return location.protocol === 'https:' ? 'wss' : 'ws';
+  }
+
+  function sweepOnceLive() {
+    return new Promise((resolve, reject) => {
+      let params;
+      try { params = sweepParams(); } catch (e) { reject(e); return; }
+      const socket = new WebSocket(`${proto()}://${location.host}/sweep/stream`);
+      ws = socket;
+      const buf = [];
+      socket.addEventListener('open', () => socket.send(JSON.stringify(params)));
+      socket.addEventListener('message', (ev) => {
+        const msg = JSON.parse(ev.data);
+        if (msg.error) { reject(new Error(msg.error)); socket.close(); return; }
+        if (msg.done) { resolve(); return; }
+        buf.push(msg);
+        drawChart(buf);
+        ensureK4hezAnimation();
+      });
+      socket.addEventListener('close', () => { if (ws === socket) ws = null; resolve(); });
+      socket.addEventListener('error', () => reject(new Error('websocket error')));
+    });
+  }
+
+  async function tuneLoop() {
+    while (tuning) {
+      try {
+        await sweepOnceLive();
+      } catch (e) {
+        log(e.message, true);
+        break;
+      }
+    }
+    tuning = false;
+    tuneBtn.textContent = 'Start live tuning';
+    tuneBtn.className = '';
+    sweepBtn.disabled = !connected;
+  }
+
+  tuneBtn.addEventListener('click', () => {
+    if (tuning) {
+      tuning = false;
+      if (ws) { try { ws.close(); } catch (_) {} }
+      log('stopping...');
+      return;
+    }
+    try {
+      sweepParams(); // validate before starting
+    } catch (e) {
+      log(e.message, true);
+      return;
+    }
+    tuning = true;
+    tuneBtn.textContent = 'Stop live tuning';
+    tuneBtn.className = 'tuning';
+    sweepBtn.disabled = true;
+    log('live tuning: adjust the antenna and watch the curve');
+    tuneLoop();
+  });
+
+  window.addEventListener('resize', () => drawChart(lastPoints));
+
+  refreshDevices();
+  refreshStatus();
+  drawChart([]);
+})();
+</script>
+</body>
+</html>
