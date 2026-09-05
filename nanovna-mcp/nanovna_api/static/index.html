@@ -125,11 +125,12 @@
     </label>
   </div>
   <div id="bandLegend" class="row" hidden style="margin-top:8px; font-size:11px; color:var(--muted); gap:12px;">
+    <span><span class="swatch" style="background:rgba(255,255,255,0.95); border:1px solid var(--border);"></span> CW only</span>
     <span><span class="swatch" style="background:rgba(255,92,92,0.95)"></span> RTTY/Data</span>
     <span><span class="swatch" style="background:rgba(60,200,120,0.95)"></span> Phone/Image</span>
     <span><span class="swatch" style="background:rgba(235,210,70,0.95)"></span> SSB only</span>
     <span><span class="swatch" style="background:rgba(79,176,255,0.95)"></span> 60m channel</span>
-    <span style="color:var(--text);">Rows top→bottom: Extra / Advanced / General / Technician</span>
+    <span style="color:var(--text);">Rows top→bottom: Extra(E) / Advanced(A) / General(G) / Technician(T)</span>
   </div>
   <div class="row" style="margin-top:8px;">
     <div class="field" style="flex:1 1 160px;">
@@ -211,13 +212,17 @@
     { name: '160m', startHz: 1800000, stopHz: 2000000, licensedClasses: ['General', 'Advanced', 'Extra'] },
     { name: '80m', startHz: 3500000, stopHz: 4000000,
       modes: [{ startHz: 3500000, stopHz: 3600000, color: 'red',
-                privilege: { Technician: [3525000, 3600000], General: [3525000, 3600000], Advanced: [3525000, 3600000], Extra: [3500000, 3600000] } },
+                // Technician's 3.525-3.6MHz privilege here is CW only --
+                // General-and-up share the same slice but also get
+                // RTTY/Data, so only Technician's row is colored white.
+                privilege: { Technician: { range: [3525000, 3600000], color: 'white' }, General: [3525000, 3600000], Advanced: [3525000, 3600000], Extra: [3500000, 3600000] } },
               { startHz: 3600000, stopHz: 4000000, color: 'green',
                 privilege: { General: [3800000, 4000000], Advanced: [3700000, 4000000], Extra: [3600000, 4000000] } }] },
     { name: '60m', channelsHz: [5332000, 5348000, [5351500, 5366500], 5373000, 5405000], licensedClasses: ['General', 'Advanced', 'Extra'] },
     { name: '40m', startHz: 7000000, stopHz: 7300000,
       modes: [{ startHz: 7000000, stopHz: 7125000, color: 'red',
-                privilege: { Technician: [7025000, 7125000], General: [7025000, 7125000], Advanced: [7025000, 7125000], Extra: [7000000, 7125000] } },
+                // Technician's 7.025-7.125MHz privilege here is CW only.
+                privilege: { Technician: { range: [7025000, 7125000], color: 'white' }, General: [7025000, 7125000], Advanced: [7025000, 7125000], Extra: [7000000, 7125000] } },
               { startHz: 7125000, stopHz: 7300000, color: 'green',
                 privilege: { General: [7175000, 7300000], Advanced: [7125000, 7300000], Extra: [7125000, 7300000] } }] },
     { name: '30m', startHz: 10100000, stopHz: 10150000,
@@ -235,7 +240,8 @@
                 privilege: { General: [18110000, 18168000], Advanced: [18110000, 18168000], Extra: [18110000, 18168000] } }] },
     { name: '15m', startHz: 21000000, stopHz: 21450000,
       modes: [{ startHz: 21000000, stopHz: 21200000, color: 'red',
-                privilege: { Technician: [21025000, 21200000], General: [21025000, 21200000], Advanced: [21025000, 21200000], Extra: [21000000, 21200000] } },
+                // Technician's 21.025-21.2MHz privilege here is CW only.
+                privilege: { Technician: { range: [21025000, 21200000], color: 'white' }, General: [21025000, 21200000], Advanced: [21025000, 21200000], Extra: [21000000, 21200000] } },
               { startHz: 21200000, stopHz: 21450000, color: 'green',
                 privilege: { General: [21275000, 21450000], Advanced: [21225000, 21450000], Extra: [21200000, 21450000] } }] },
     { name: '12m', startHz: 24890000, stopHz: 24990000,
@@ -253,10 +259,10 @@
                 privilege: { Technician: { range: [28300000, 28500000], color: 'yellow' },
                              General: [28300000, 29700000], Advanced: [28300000, 29700000], Extra: [28300000, 29700000] } }] },
     { name: '6m', startHz: 50000000, stopHz: 54000000,
-      modes: [{ startHz: 50000000, stopHz: 50100000, color: 'red' },
+      modes: [{ startHz: 50000000, stopHz: 50100000, color: 'white' },
               { startHz: 50100000, stopHz: 54000000, color: 'green' }] },
     { name: '2m', startHz: 144000000, stopHz: 148000000,
-      modes: [{ startHz: 144000000, stopHz: 144100000, color: 'red' },
+      modes: [{ startHz: 144000000, stopHz: 144100000, color: 'white' },
               { startHz: 144100000, stopHz: 148000000, color: 'green' }] },
     { name: '1.25m', startHz: 222000000, stopHz: 225000000 },
     { name: '70cm', startHz: 420000000, stopHz: 450000000 },
@@ -454,6 +460,7 @@
     green: 'rgba(60, 200, 120, 0.95)',
     yellow: 'rgba(235, 210, 70, 0.95)',
     blue: 'rgba(79, 176, 255, 0.95)',
+    white: 'rgba(255, 255, 255, 0.95)',
   };
   // Same hues as MODE_COLORS but as bare "r, g, b" triples, for building a
   // flicker-modulated rgba() string in K4HEZ Style.
@@ -462,11 +469,13 @@
     green: '60, 200, 120',
     yellow: '235, 210, 70',
     blue: '79, 176, 255',
+    white: '255, 255, 255',
   };
   // Stacked per-class rows, ARRL-chart style: top-to-bottom Extra/Advanced/
   // General/Technician, each row showing only the sub-range that class can
   // actually use -- not one bar plus a boundary marker.
   const LICENSE_ROWS = ['Extra', 'Advanced', 'General', 'Technician'];
+  const ROW_INITIAL = { Extra: 'E', Advanced: 'A', General: 'G', Technician: 'T' };
   const ROW_H = 8;
   const MODE_STRIP_H = LICENSE_ROWS.length * ROW_H;
 
@@ -712,6 +721,28 @@
           });
         }
         ctx.shadowBlur = 0;
+
+        // In the stacked "All licenses" view, label each row with its
+        // class initial at both edges of the band so it's clear which row
+        // is whose privileges without checking the legend -- shown for
+        // every row regardless of whether that class has any privilege
+        // drawn there (an unlabeled empty row would just look broken).
+        if (!selectedClass) {
+          ctx.font = '8px sans-serif';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+          LICENSE_ROWS.forEach((cls, row) => {
+            const cy = padT + row * ROW_H + ROW_H / 2;
+            const initial = ROW_INITIAL[cls];
+            ctx.textAlign = 'left';
+            ctx.fillText(initial, x0 + 2, cy);
+            ctx.textAlign = 'right';
+            ctx.fillText(initial, x1 - 2, cy);
+          });
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'alphabetic';
+          ctx.font = '9px sans-serif';
+        }
       }
     }
     ctx.restore();
