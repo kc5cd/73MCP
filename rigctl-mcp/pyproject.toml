@@ -1,0 +1,26 @@
+[project]
+name = "rigctl-mcp"
+version = "0.1.0"
+description = "MCP server wrapping Hamlib's rigctld for rig control (frequency, mode, status)"
+requires-python = ">=3.10"
+dependencies = [
+    # Pinned to an exact version, not `>=1.0` -- an unpinned range silently
+    # resolved to a 2.x release with a renamed API and different
+    # exception-forwarding behavior during nanovna-mcp's build (see that
+    # branch's .claude/state/context.md). 2.1.1 is the latest release as
+    # of this pin, matching wsjtx-mcp and nanovna-mcp.
+    "mcp==2.1.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
+
+[project.scripts]
+rigctl-mcp = "rigctl_mcp.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["rigctl_client*", "rigctl_mcp*"]
