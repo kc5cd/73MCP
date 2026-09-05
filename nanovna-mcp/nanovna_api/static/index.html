@@ -723,21 +723,23 @@
         ctx.shadowBlur = 0;
 
         // In the stacked "All licenses" view, label each row with its
-        // class initial at both edges of the band so it's clear which row
-        // is whose privileges without checking the legend -- shown for
-        // every row regardless of whether that class has any privilege
-        // drawn there (an unlabeled empty row would just look broken).
+        // class initial just outside both edges of the band -- not
+        // overlapping the band's own color -- so it's clear which row is
+        // whose privileges without checking the legend. Shown for every
+        // row regardless of whether that class has any privilege drawn
+        // there (an unlabeled empty row would just look broken).
         if (!selectedClass) {
+          const LABEL_GAP = 5;
           ctx.font = '8px sans-serif';
           ctx.textBaseline = 'middle';
           ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
           LICENSE_ROWS.forEach((cls, row) => {
             const cy = padT + row * ROW_H + ROW_H / 2;
             const initial = ROW_INITIAL[cls];
-            ctx.textAlign = 'left';
-            ctx.fillText(initial, x0 + 2, cy);
             ctx.textAlign = 'right';
-            ctx.fillText(initial, x1 - 2, cy);
+            ctx.fillText(initial, x0 - LABEL_GAP, cy);
+            ctx.textAlign = 'left';
+            ctx.fillText(initial, x1 + LABEL_GAP, cy);
           });
           ctx.textAlign = 'left';
           ctx.textBaseline = 'alphabetic';
