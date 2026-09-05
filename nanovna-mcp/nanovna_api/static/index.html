@@ -894,14 +894,20 @@
       hoverBars = [];
     }
 
-    ctx.strokeStyle = '#4fb0ff';
+    // Colored per segment by SWR rather than one flat trace color -- a
+    // segment counts as "bad" (red) if either endpoint is above 3:1, so a
+    // crossing point always lands on the red side rather than looking
+    // falsely clean.
+    const SWR_BAD_THRESHOLD = 3;
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    pts.forEach((p, i) => {
-      const px = x(p.freq_hz), py = y(p.swr);
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    });
-    ctx.stroke();
+    for (let i = 1; i < pts.length; i++) {
+      const p0 = pts[i - 1], p1 = pts[i];
+      ctx.strokeStyle = (p0.swr > SWR_BAD_THRESHOLD || p1.swr > SWR_BAD_THRESHOLD) ? '#ff5c5c' : '#35d07f';
+      ctx.beginPath();
+      ctx.moveTo(x(p0.freq_hz), y(p0.swr));
+      ctx.lineTo(x(p1.freq_hz), y(p1.swr));
+      ctx.stroke();
+    }
 
     ctx.fillStyle = '#8b96a5';
     ctx.fillText((fMin / 1e6).toFixed(3) + ' MHz', padL, h - 6);
