@@ -249,6 +249,11 @@
                 privilege: { General: [24890000, 24930000], Advanced: [24890000, 24930000], Extra: [24890000, 24930000] } },
               { startHz: 24930000, stopHz: 24990000, color: 'green',
                 privilege: { General: [24930000, 24990000], Advanced: [24930000, 24990000], Extra: [24930000, 24990000] } }] },
+    // Citizens Band -- not an amateur allocation at all (bands.md's own
+    // "11M" section is blank for every class). Included so it isn't
+    // mistaken for a gap in the chart between 12m and 10m; licensedClasses:
+    // [] keeps it out of every class's licensedIntervals()/grayout.
+    { name: '11m (CB)', startHz: 26965000, stopHz: 27405000, licensedClasses: [], notAmateur: true },
     { name: '10m', startHz: 28000000, stopHz: 29700000,
       modes: [{ startHz: 28000000, stopHz: 28300000, color: 'red',
                 privilege: { Technician: [28000000, 28300000], General: [28000000, 29700000], Advanced: [28000000, 29700000], Extra: [28000000, 29700000] } },
@@ -711,7 +716,21 @@
 
       drawBandWatermark(band.name, x0, x1, padT, plotH);
 
-      if (band.modes) {
+      if (band.notAmateur) {
+        // No license grants any privilege here at all (e.g. 11m/CB) -- a
+        // flat black bar across the whole privilege-row strip, with the
+        // label allowed to overflow past the bar's own width rather than
+        // being clipped, since the band itself is often only a handful of
+        // pixels wide at typical HF sweep spans.
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(x0, padT, Math.max(1, x1 - x0), MODE_STRIP_H);
+        ctx.font = '9px sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Not Allowed With Amateur Radio Equipment', x0 + 2, padT + MODE_STRIP_H / 2);
+        ctx.textBaseline = 'alphabetic';
+      } else if (band.modes) {
         for (const seg of band.modes) {
           rows.forEach((cls, row) => {
             const range = privilegeRange(seg, cls);
