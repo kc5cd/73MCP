@@ -724,11 +724,12 @@
         // pixels wide at typical HF sweep spans.
         ctx.fillStyle = '#000000';
         ctx.fillRect(x0, padT, Math.max(1, x1 - x0), MODE_STRIP_H);
-        ctx.font = '9px sans-serif';
+        ctx.font = '18px sans-serif';
         ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'left';
+        ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('Not Allowed With Amateur Radio Equipment', x0 + 2, padT + MODE_STRIP_H / 2);
+        ctx.fillText('Not Allowed With Amateur Radio Equipment', (x0 + x1) / 2, padT + MODE_STRIP_H / 2);
+        ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
       } else if (band.modes) {
         for (const seg of band.modes) {
