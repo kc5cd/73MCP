@@ -570,9 +570,15 @@
   // Gaps in [fMin, fMax] not covered by any licensed interval -- includes
   // both license-restricted sub-bands and frequencies outside any amateur
   // allocation at all (neither is usable, so both get grayed the same way).
+  // Exception: a `notAmateur` band (11m/CB) already renders its own "not
+  // allowed" marking, so it's excluded here too -- it shouldn't also dim
+  // like an ordinary out-of-privilege gap, for any license class.
   function unlicensedRanges(fMin, fMax, licenseClass) {
+    const covered = licensedIntervals(licenseClass)
+      .concat(BANDS.filter((b) => b.notAmateur).map((b) => [b.startHz, b.stopHz]))
+      .sort((a, b) => a[0] - b[0]);
     const merged = [];
-    for (const [s, e] of licensedIntervals(licenseClass)) {
+    for (const [s, e] of covered) {
       if (e <= fMin || s >= fMax) continue;
       const cs = Math.max(s, fMin), ce = Math.min(e, fMax);
       if (merged.length && cs <= merged[merged.length - 1][1]) {
