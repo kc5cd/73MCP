@@ -93,15 +93,15 @@
     </div>
     <div class="field">
       <label for="startMhz">Start MHz</label>
-      <input id="startMhz" type="number" step="any" placeholder="14.000">
+      <input id="startMhz" type="number" step="0.25" placeholder="14.000">
     </div>
     <div class="field">
       <label for="stopMhz">Stop MHz</label>
-      <input id="stopMhz" type="number" step="any" placeholder="14.350">
+      <input id="stopMhz" type="number" step="0.25" placeholder="14.350">
     </div>
     <div class="field">
       <label for="points">Points</label>
-      <input id="points" type="number" step="1" min="2" max="401" placeholder="101">
+      <input id="points" type="number" step="25" min="2" max="401" placeholder="101">
     </div>
     <div class="field">
       <label for="swrMax">Chart max SWR</label>
@@ -315,8 +315,11 @@
     const bands = BANDS_BY_REGION[ituRegionSel.value];
     if (!bands || bandSel.value === '') return;
     const [s, e] = bandRange(bands[parseInt(bandSel.value, 10)]);
-    startMhz.value = (s / 1e6).toString();
-    stopMhz.value = (e / 1e6).toString();
+    // Pad 0.15MHz past each edge so the sweep shows a bit of the skirts
+    // outside the band, not just the exact allocation boundary.
+    const PAD_HZ = 150000;
+    startMhz.value = (Math.max(1000, s - PAD_HZ) / 1e6).toString();
+    stopMhz.value = ((e + PAD_HZ) / 1e6).toString();
     localStorage.setItem('nvt_start', startMhz.value);
     localStorage.setItem('nvt_stop', stopMhz.value);
   });
