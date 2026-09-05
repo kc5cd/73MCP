@@ -37,10 +37,12 @@ designed/built separately; it has no dependency on this daemon.
 ## Where the pieces live
 
 - **This daemon** (`nanovna-mcp/`, this branch): owns the serial port, exposes REST+WebSocket.
-- **MCP server**: not yet built.
-- **Webapp**: built 2026-09-04 — a single self-contained page served by the daemon itself at
-  `/` (`nanovna_api/static/index.html`), no build step, no CDN dependencies (works offline on
-  the LAN). See `## Webapp` below.
+- **MCP server** (`nanovna_mcp/`): built 2026-09-03 — stdio transport, 6 tools
+  (`list_devices`, `status`, `connect`, `disconnect`, `get_info`, `sweep`) over the daemon's
+  REST API. See `## MCP server` below.
+- **Webapp**: built 2026-09-04, extended through 2026-09-05 — a single self-contained page
+  served by the daemon itself at `/` (`nanovna_api/static/index.html`), no build step, no CDN
+  dependencies (works offline on the LAN). See `## Webapp` below.
 
 **`nanovna-mcp` is a standalone project, fully decoupled from `73MCP`'s `antscope-mcp`
 sub-project** (confirmed by Casey 2026-09-03, after a brief period where the two were
@@ -60,7 +62,7 @@ NanoVNA (USB-serial, VID 0x0483 / PID 0x5740)
    v                  v
 [REST endpoints]   [WebSocket: live sweep stream]
             |
-   consumed by BOTH of, independently (not yet built):
+   consumed by BOTH of, independently:
      [MCP server]     [webapp]
 ```
 
@@ -136,6 +138,18 @@ curl -X POST http://<host>:8765/connect -H "Content-Type: application/json" -d "
 curl -X POST http://<host>:8765/sweep -H "Content-Type: application/json" -d "{\"start_hz\":420000000,\"stop_hz\":540000000,\"points\":101}"
 ```
 
+## MCP server
+
+`nanovna_mcp/` — stdio transport, 6 tools thin-wrapping the daemon's REST API: `list_devices`,
+`status`, `connect`, `disconnect`, `get_info`, `sweep` (blocking — returns the finished sweep
+rather than streaming). Verified end-to-end via a real `ClientSession` against the running
+daemon (no hardware); not yet separately verified against real NanoVNA hardware beyond the
+daemon protocol itself (see `## Status`).
+
+```
+.venv\Scripts\python -m nanovna_mcp --daemon-url http://<host>:8765
+```
+
 ## Webapp
 
 Open `http://<host>:8765/` in any browser on the same LAN (phone, laptop, tablet) — the daemon
@@ -143,9 +157,36 @@ serves the page itself, so there's nothing separate to install or deploy. Flow: 
 from the dropdown and Connect, enter a Start/Stop MHz range and point count, then either
 **Sweep once** or **Start live tuning** (repeats the sweep continuously over the WebSocket
 stream so the SWR curve updates live while you adjust the antenna). The chart marks the
-lowest-SWR point and reports its frequency and impedance. Last-used sweep params are
-remembered per-browser (`localStorage`). No auth, matching this project's local-network-only
-v1 scope.
+lowest-SWR point and reports its frequency and impedance; the trace itself is colored red
+wherever SWR exceeds 3:1 and green elsewhere. Last-used sweep params are remembered
+per-browser (`localStorage`). No auth, matching this project's local-network-only v1 scope.
+
+**Band selection**: ITU Region + Band dropdowns sit above Start/Stop MHz — picking a band
+fills Start/Stop from that band's edges (padded 0.05MHz past each edge). Only ITU Region 2
+(the Americas, i.e. the US band plan) has real data; Regions 1/3 show a placeholder. Points
+steps by 25, Start/Stop MHz step by 0.1MHz.
+
+**"Highlight amateur bands"** overlays the full US band plan (2200m through 23cm, plus 11m
+CB) on the chart, sourced from `bands.md` in this directory — Casey's own transcription of
+the ARRL band chart, which is the authoritative data for every band edge and per-license-class
+privilege in this webapp (not derived from general knowledge of 47 CFR 97.301). Each band
+renders as a low-opacity full-height watermark plus ARRL-style mode-color rows (red =
+RTTY/Data, green = Phone/Image, yellow = SSB-only, blue = 60m, white = CW-only), each with a
+thin border and a hover tooltip naming its license class.
+
+**License dropdown**: "All licenses" shows all four rows stacked (Extra/Advanced/General/
+Technician, top to bottom, each labeled with a T/G/A/E initial outside the band's edges —
+skipped for a class with zero privilege anywhere in that band, e.g. Technician on 30m).
+Picking one specific class instead expands that class's row to fill the strip and grays out
+the swept frequencies that fall outside its privileges.
+
+**11m (CB)**, 26.965-27.405MHz, is not an amateur allocation at all (confirmed blank in
+`bands.md`) — it renders a black "Not Allowed With Amateur Radio Equipment" bar instead of
+privilege rows, is excluded from every class's grayout regardless of selection, and (only
+when Extra is selected) adds a small "Even you cannot transmit here" line near the bottom.
+
+**"K4HEZ Style"** (Casey's own request) turns the band watermarks and mode-color rows into an
+animated neon-pink flicker effect, purely cosmetic.
 
 ## Tests
 
@@ -176,3 +217,16 @@ v1 scope.
   `2*points - 1` frequency points (11 requested → 21 returned) rather than exactly `points` —
   not yet investigated further, doesn't affect correctness of the returned points, only the
   count.
+- **MCP server** (`nanovna_mcp/`) built and verified 2026-09-03 against the real daemon (no
+  hardware) via a stdio `ClientSession` exercising all 6 tools, including the error path
+  (daemon errors surface as `ToolError` so the real message reaches the caller instead of a
+  generic "Error executing tool X" — an `mcp` SDK 2.x behavior change, not the daemon's fault).
+  Not yet separately verified against real NanoVNA hardware.
+- **Webapp band/privilege data corrected 2026-09-04/05**: originally derived from general
+  knowledge of 47 CFR 97.301 (never freshly re-verified against a primary source — WebFetch
+  attempts against ecfr.gov/law.cornell.edu/arrl.org all failed). Replaced with `bands.md`
+  (Casey's own ARRL chart transcription), which corrected several sub-band edges (80m/40m/
+  20m/15m Advanced privileges) and resolved
+  [issue #3](https://github.com/kc5cd/73MCP/issues/3) (70cm/2m/1.25m mode coloring had looked
+  incomplete but was actually correct once bands.md confirmed those bands have no per-class
+  split).
