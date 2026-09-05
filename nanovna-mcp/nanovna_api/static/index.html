@@ -118,6 +118,16 @@
         <option value="20">20:1</option>
       </select>
     </div>
+    <div class="field" style="flex:0 1 180px;">
+      <label for="freqMarkers">Freq markers</label>
+      <select id="freqMarkers">
+        <option value="">None</option>
+        <option value="ft8">FT8</option>
+        <option value="ft4">FT4</option>
+        <option value="js8">JS8</option>
+        <option value="calling">National Calling Freqs (QRP USA)</option>
+      </select>
+    </div>
   </div>
   <div class="row" style="margin-top:10px;">
     <label style="display:flex; align-items:center; gap:6px; width:auto;">
@@ -181,6 +191,7 @@
   const stopMhz = $('stopMhz');
   const points = $('points');
   const swrMaxSel = $('swrMax');
+  const freqMarkersSel = $('freqMarkers');
   const hamBandsEl = $('hamBands');
   const k4hezEl = $('k4hez');
   const bandLegendEl = $('bandLegend');
@@ -288,6 +299,106 @@
   // other regions' band plans genuinely differ (e.g. 40m/80m edges).
   const BANDS_BY_REGION = { 2: BANDS };
 
+  // Digital-mode dial frequencies and general calling frequencies, sourced
+  // 2026-09-05 from the ShackNotes project (docs/ShackNotes on this
+  // machine; not part of this repo). `*` in the source marks the
+  // primary/default dial frequency where a band lists more than one --
+  // kept in the label rather than dropped, since a secondary frequency is
+  // still a real, useful marker. "National Calling Freqs" here means the
+  // QRP Calling Frequencies (USA) table specifically (Casey's choice --
+  // ShackNotes' calling-frequencies doc has several different candidate
+  // lists: QRP USA, QRP Europe, HF Portable, 6m detail, VHF/UHF/SHF; only
+  // QRP USA covers HF fully under one coherent label).
+  const FREQ_MARKER_SETS = {
+    ft8: [
+      { hz: 1.840e6, label: '160m FT8' },
+      { hz: 3.573e6, label: '80m FT8' },
+      { hz: 5.357e6, label: '60m FT8' },
+      { hz: 7.056e6, label: '40m FT8' },
+      { hz: 7.071e6, label: '40m FT8' },
+      { hz: 7.074e6, label: '40m FT8*' },
+      { hz: 10.132e6, label: '30m FT8' },
+      { hz: 10.133e6, label: '30m FT8' },
+      { hz: 10.136e6, label: '30m FT8*' },
+      { hz: 14.071e6, label: '20m FT8' },
+      { hz: 14.074e6, label: '20m FT8*' },
+      { hz: 14.090e6, label: '20m FT8' },
+      { hz: 18.100e6, label: '17m FT8' },
+      { hz: 21.074e6, label: '15m FT8*' },
+      { hz: 21.091e6, label: '15m FT8' },
+      { hz: 24.915e6, label: '12m FT8' },
+      { hz: 28.074e6, label: '10m FT8' },
+      { hz: 50.310e6, label: '6m FT8' },
+      { hz: 50.313e6, label: '6m FT8*' },
+      { hz: 50.323e6, label: '6m FT8' },
+      { hz: 70.100e6, label: '4m FT8' },
+      { hz: 70.154e6, label: '4m FT8' },
+      { hz: 144.174e6, label: '2m FT8' },
+      { hz: 222.065e6, label: '1.25m FT8' },
+      { hz: 432.065e6, label: '70cm FT8*' },
+      { hz: 432.174e6, label: '70cm FT8' },
+      { hz: 1296.174e6, label: '23cm FT8' },
+    ],
+    ft4: [
+      { hz: 3.575e6, label: '80m FT4' },
+      { hz: 7.0475e6, label: '40m FT4' },
+      { hz: 10.140e6, label: '30m FT4' },
+      { hz: 14.080e6, label: '20m FT4' },
+      { hz: 18.104e6, label: '17m FT4' },
+      { hz: 21.140e6, label: '15m FT4' },
+      { hz: 24.919e6, label: '12m FT4' },
+      { hz: 28.180e6, label: '10m FT4' },
+      { hz: 50.318e6, label: '6m FT4' },
+      { hz: 144.170e6, label: '2m FT4' },
+    ],
+    js8: [
+      { hz: 1.842e6, label: '160m JS8' },
+      { hz: 3.578e6, label: '80m JS8' },
+      { hz: 7.078e6, label: '40m JS8' },
+      { hz: 10.130e6, label: '30m JS8' },
+      { hz: 14.078e6, label: '20m JS8' },
+      { hz: 18.104e6, label: '17m JS8' },
+      { hz: 21.078e6, label: '15m JS8' },
+      { hz: 24.922e6, label: '12m JS8' },
+      { hz: 27.245e6, label: '11m JS8' },
+      { hz: 28.078e6, label: '10m JS8' },
+      { hz: 50.318e6, label: '6m JS8' },
+    ],
+    calling: [
+      { hz: 1.810e6, label: '160m CW QRP' },
+      { hz: 1.910e6, label: '160m SSB QRP' },
+      { hz: 3.560e6, label: '80m CW QRP' },
+      { hz: 3.985e6, label: '80m SSB QRP' },
+      { hz: 3.579e6, label: '80m CW (Colorburst)' },
+      { hz: 3.710e6, label: '80m CW (Novice)' },
+      { hz: 7.040e6, label: '40m CW QRP / RTTY DX' },
+      { hz: 7.285e6, label: '40m SSB QRP' },
+      { hz: 7.035e6, label: '40m CW (QRP-L)' },
+      { hz: 7.110e6, label: '40m CW (Novice)' },
+      { hz: 7.112e6, label: '40m CW (NorCal)' },
+      { hz: 10.106e6, label: '30m CW QRP' },
+      { hz: 10.116e6, label: '30m CW (QRP-L)' },
+      { hz: 14.060e6, label: '20m CW QRP' },
+      { hz: 14.285e6, label: '20m SSB QRP' },
+      { hz: 18.096e6, label: '17m CW QRP' },
+      { hz: 18.130e6, label: '17m SSB QRP' },
+      { hz: 21.060e6, label: '15m CW QRP' },
+      { hz: 21.385e6, label: '15m SSB QRP' },
+      { hz: 21.110e6, label: '15m CW (Novice)' },
+      { hz: 24.906e6, label: '12m CW QRP' },
+      { hz: 24.950e6, label: '12m SSB QRP' },
+      { hz: 28.060e6, label: '10m CW QRP' },
+      { hz: 28.885e6, label: '10m SSB QRP' },
+      { hz: 28.110e6, label: '10m CW (Novice)' },
+      { hz: 28.385e6, label: '10m SSB (Novice)' },
+      { hz: 50.060e6, label: '6m CW QRP' },
+      { hz: 50.885e6, label: '6m SSB QRP' },
+      { hz: 144.060e6, label: '2m CW QRP' },
+      { hz: 144.285e6, label: '2m SSB QRP' },
+      { hz: 144.585e6, label: '2m FM QRP' },
+    ],
+  };
+
   // The [startHz, stopHz] to sweep for a "pick a band" selection -- for a
   // channelized band (60m) this spans from the first channel's start to the
   // last channel's stop, covering every channel in one sweep.
@@ -357,6 +468,7 @@
   bandLegendEl.hidden = !hamBandsEl.checked;
   licenseSel.value = localStorage.getItem('nvt_license') || '';
   k4hezEl.checked = localStorage.getItem('nvt_k4hez') === '1';
+  freqMarkersSel.value = localStorage.getItem('nvt_freqmarkers') || '';
 
   swrMaxSel.addEventListener('change', () => {
     swrMax = parseFloat(swrMaxSel.value);
@@ -378,6 +490,11 @@
 
   licenseSel.addEventListener('change', () => {
     localStorage.setItem('nvt_license', licenseSel.value);
+    drawChart(lastPoints);
+  });
+
+  freqMarkersSel.addEventListener('change', () => {
+    localStorage.setItem('nvt_freqmarkers', freqMarkersSel.value);
     drawChart(lastPoints);
   });
 
@@ -851,6 +968,36 @@
     ctx.restore();
   }
 
+  // Thin dashed vertical line + sideways label per marker frequency inside
+  // the current sweep range. Text runs top-to-bottom (rotated 90°) rather
+  // than horizontal so closely-spaced markers (e.g. 40m's three FT8
+  // frequencies) don't overlap each other.
+  function drawFreqMarkers(fMin, fMax, x, padT, plotH) {
+    const set = FREQ_MARKER_SETS[freqMarkersSel.value];
+    if (!set) return;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 209, 102, 0.55)';
+    ctx.fillStyle = 'rgba(255, 209, 102, 0.9)';
+    ctx.font = '9px sans-serif';
+    ctx.setLineDash([3, 3]);
+    ctx.lineWidth = 1;
+    for (const m of set) {
+      if (m.hz < fMin || m.hz > fMax) continue;
+      const mx = x(m.hz);
+      ctx.beginPath();
+      ctx.moveTo(mx, padT);
+      ctx.lineTo(mx, padT + plotH);
+      ctx.stroke();
+      ctx.save();
+      ctx.translate(mx + 2, padT + 2);
+      ctx.rotate(Math.PI / 2);
+      ctx.textBaseline = 'top';
+      ctx.fillText(m.label, 0, 0);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
   function drawChart(pts) {
     lastPoints = pts;
     const w = canvas.clientWidth || canvas.width;
@@ -908,6 +1055,8 @@
       ctx.lineTo(x(p1.freq_hz), y(p1.swr));
       ctx.stroke();
     }
+
+    drawFreqMarkers(fMin, fMax, x, padT, plotH);
 
     ctx.fillStyle = '#8b96a5';
     ctx.fillText((fMin / 1e6).toFixed(3) + ' MHz', padL, h - 6);
