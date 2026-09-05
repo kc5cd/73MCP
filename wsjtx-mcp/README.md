@@ -3,8 +3,8 @@
 MCP server for [WSJT-X](https://wsjt.sourceforge.io/), exposing its live UDP protocol
 (station status, decodes, logged QSOs) to MCP clients.
 
-Status: implemented and verified (no real WSJT-X instance yet — synthetic UDP traffic only,
-see `PLAN.md`'s "Verification" section). No daemon: this process binds WSJT-X's UDP feed
+Status: implemented and verified, including against a real running WSJT-X instance (2026-09-05
+— see `PLAN.md`'s "Verification" section). No daemon: this process binds WSJT-X's UDP feed
 itself.
 
 ## Running

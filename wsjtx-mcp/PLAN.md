@@ -104,5 +104,11 @@ from this doc's original phrasing: the UDP listener is started via `MCPServer`'s
 hook, not "before calling `mcp.run()`" — `mcp.run()` owns the event loop itself, so there's no
 loop available beforehand to bind the socket on.
 
-Real-WSJT-X verification (as opposed to synthetic UDP datagrams) is still outstanding, same
-status as `nanovna-mcp`'s real-hardware verification gap.
+**Real-WSJT-X verified 2026-09-05**: with WSJT-X actually running (callsign `KC5CD`, grid
+`FM17GW`, UDP Server enabled at the default `127.0.0.1:2237`), `wsjtx_mcp` was driven over stdio
+with a real `ClientSession`. `get_status` correctly reported the live dial frequency/mode/
+call/grid after the first Status heartbeat arrived (took a few seconds — WSJT-X only sends
+Status periodically, so the first `get_status` call or two can legitimately see "no WSJT-X
+instance has been heard from yet" before that). `get_recent_decodes`/`get_recent_qsos` both
+round-tripped correctly too, empty since no audio was feeding WSJT-X and no QSO was logged
+during the test.
