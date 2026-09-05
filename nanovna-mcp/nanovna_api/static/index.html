@@ -521,6 +521,15 @@
     return seg.color;
   }
 
+  // Whether a class has any privilege at all in this band -- across every
+  // mode segment, not just one -- used to skip that class's row-initial
+  // label entirely rather than labeling a row that's empty everywhere in
+  // the band (e.g. 30m has no Technician privilege anywhere in it).
+  function bandHasPrivilege(band, licenseClass) {
+    if (!band.modes) return true;
+    return band.modes.some((seg) => privilegeRange(seg, licenseClass) !== null);
+  }
+
   // A 60m channelsHz entry is normally a bare center frequency (2.8kHz-wide
   // channel implied); the one channel the FCC widened in 2021 is instead
   // stored as an explicit [startHz, stopHz] pair.
@@ -765,15 +774,17 @@
         // In the stacked "All licenses" view, label each row with its
         // class initial just outside both edges of the band -- not
         // overlapping the band's own color -- so it's clear which row is
-        // whose privileges without checking the legend. Shown for every
-        // row regardless of whether that class has any privilege drawn
-        // there (an unlabeled empty row would just look broken).
+        // whose privileges without checking the legend. Skipped for a
+        // class with zero privilege anywhere in this band (e.g. 30m's
+        // Technician row) -- labeling an always-empty row just looks like
+        // a mistake rather than "nothing here for you".
         if (!selectedClass) {
           const LABEL_GAP = 5;
           ctx.font = '8px sans-serif';
           ctx.textBaseline = 'middle';
           ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
           LICENSE_ROWS.forEach((cls, row) => {
+            if (!bandHasPrivilege(band, cls)) return;
             const cy = padT + row * ROW_H + ROW_H / 2;
             const initial = ROW_INITIAL[cls];
             ctx.textAlign = 'right';
