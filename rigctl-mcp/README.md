@@ -46,6 +46,11 @@ transport wouldn't be faithful). Manually verified end-to-end over stdio with a 
 `ClientSession` driving the same stub, confirming all 3 tools round-trip correctly including
 the nonzero-`RPRT` → `ToolError` path.
 
-**Real-`rigctld` verification is still outstanding** — this pass only exercised the in-process
-stub, same gap as `wsjtx-mcp`'s real-WSJT-X and `nanovna-mcp`'s real-NanoVNA-hardware
-verification.
+**Real-`rigctld` verified 2026-09-05**: WSJT-X ships its own private Hamlib build
+(`rigctld-wsjtx.exe`), run here with the Hamlib Dummy rig backend (`-m 1`) — a fully simulated
+rig, no hardware or antenna needed. `get_status`, `set_frequency`, and `set_mode` all
+round-tripped correctly against the real binary (not the test stub), with a frequency/mode
+change confirmed by a follow-up `get_status`. One finding: the Dummy backend accepts any
+string as a mode without validating it, so it doesn't exercise the nonzero-`RPRT` → `ToolError`
+path — that path stays covered by the in-process-stub tests instead, where the response can be
+scripted deliberately.
