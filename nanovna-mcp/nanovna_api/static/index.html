@@ -611,7 +611,7 @@
   // to fill most of the chart height -- a watermark identifying the band
   // at a glance, sitting behind the mode-color rows rather than a small
   // corner label competing with them for space.
-  function drawBandWatermark(name, x0, x1, padT, plotH) {
+  function drawBandWatermark(name, x0, x1, padT, plotH, subduedColor) {
     const maxWidth = (x1 - x0) * 0.85;
     const maxHeight = plotH * 0.8;
     if (maxWidth < 10 || maxHeight < 10) return;
@@ -630,7 +630,7 @@
         ctx.shadowColor = '#ff10f0';
         ctx.shadowBlur = Math.max(6, fontSize * 0.12 * (0.6 + a));
       } else {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+        ctx.fillStyle = subduedColor || 'rgba(255, 255, 255, 0.06)';
       }
       ctx.fillText(name, (x0 + x1) / 2, padT + plotH / 2);
     }
@@ -714,7 +714,7 @@
       ctx.fillStyle = 'rgba(79, 176, 255, 0.12)';
       ctx.fillRect(x0, padT, Math.max(1, x1 - x0), plotH);
 
-      drawBandWatermark(band.name, x0, x1, padT, plotH);
+      drawBandWatermark(band.name, x0, x1, padT, plotH, band.notAmateur ? 'rgba(255, 90, 90, 0.09)' : null);
 
       if (band.notAmateur) {
         // No license grants any privilege here at all (e.g. 11m/CB) -- a
