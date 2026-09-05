@@ -188,6 +188,11 @@ when Extra is selected) adds a small "Even you cannot transmit here" line near t
 **"K4HEZ Style"** (Casey's own request) turns the band watermarks and mode-color rows into an
 animated neon-pink flicker effect, purely cosmetic.
 
+**Freq markers dropdown**: overlays FT8, FT4, or JS8 dial frequencies, or a QRP-USA calling-
+frequency set, as dashed vertical lines (with a sideways label) at each listed frequency
+falling inside the current sweep range. Data is sourced from the `ShackNotes` reference
+project (a separate repo, not part of `73MCP`) rather than transcribed inline here.
+
 ## Tests
 
 ```
