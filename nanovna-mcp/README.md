@@ -37,9 +37,9 @@ designed/built separately; it has no dependency on this daemon.
 ## Where the pieces live
 
 - **This daemon** (`nanovna-mcp/`, this branch): owns the serial port, exposes REST+WebSocket.
-- **MCP server** (`nanovna_mcp/`): built 2026-09-03 — stdio transport, 6 tools
-  (`list_devices`, `status`, `connect`, `disconnect`, `get_info`, `sweep`) over the daemon's
-  REST API. See `## MCP server` below.
+- **MCP server** (`nanovna_mcp/`): built 2026-09-03, verified against real hardware 2026-09-05
+  — stdio transport, 6 tools (`list_devices`, `status`, `connect`, `disconnect`, `get_info`,
+  `sweep`) over the daemon's REST API. See `## MCP server` below.
 - **Webapp**: built 2026-09-04, extended through 2026-09-05 — a single self-contained page
   served by the daemon itself at `/` (`nanovna_api/static/index.html`), no build step, no CDN
   dependencies (works offline on the LAN). See `## Webapp` below.
@@ -143,8 +143,8 @@ curl -X POST http://<host>:8765/sweep -H "Content-Type: application/json" -d "{\
 `nanovna_mcp/` — stdio transport, 6 tools thin-wrapping the daemon's REST API: `list_devices`,
 `status`, `connect`, `disconnect`, `get_info`, `sweep` (blocking — returns the finished sweep
 rather than streaming). Verified end-to-end via a real `ClientSession` against the running
-daemon (no hardware); not yet separately verified against real NanoVNA hardware beyond the
-daemon protocol itself (see `## Status`).
+daemon, first without hardware (2026-09-03) and then against a real connected NanoVNA
+(2026-09-05, see `## Status`).
 
 ```
 .venv\Scripts\python -m nanovna_mcp --daemon-url http://<host>:8765
@@ -226,7 +226,14 @@ project (a separate repo, not part of `73MCP`) rather than transcribed inline he
   hardware) via a stdio `ClientSession` exercising all 6 tools, including the error path
   (daemon errors surface as `ToolError` so the real message reaches the caller instead of a
   generic "Error executing tool X" — an `mcp` SDK 2.x behavior change, not the daemon's fault).
-  Not yet separately verified against real NanoVNA hardware.
+- **Verified against real NanoVNA hardware end-to-end (2026-09-05)**: with a real antenna
+  connected (a known SWR dip reported around ~21.26MHz), drove `nanovna_mcp` over stdio —
+  `list_devices` → `connect("COM20")` → `get_info` (NanoVNA-H4, firmware 1.2.44) → `sweep` →
+  `disconnect` — all correct, and the sweep found the dip at 21.275MHz (101-point sweep,
+  20-22.5MHz), later confirmed at 21.27MHz with a tighter 51-point sweep. Also exercised the
+  webapp's own endpoints directly (not through a browser): `POST /connect`, `POST /sweep`, and
+  the `WS /sweep/stream` live-tuning stream all round-tripped correctly against the same
+  hardware.
 - **Webapp band/privilege data corrected 2026-09-04/05**: originally derived from general
   knowledge of 47 CFR 97.301 (never freshly re-verified against a primary source — WebFetch
   attempts against ecfr.gov/law.cornell.edu/arrl.org all failed). Replaced with `bands.md`
