@@ -737,6 +737,17 @@
         ctx.fillText('Not Allowed With Amateur Radio Equipment', (x0 + x1) / 2, padT + MODE_STRIP_H / 2);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
+
+        // Extra doesn't get a pass here either -- called out specifically
+        // since Extra is used to having the widest privileges everywhere
+        // else on the chart.
+        if (licenseSel.value === 'Extra') {
+          ctx.font = '18px sans-serif';
+          ctx.fillStyle = '#FF00FF';
+          ctx.textAlign = 'center';
+          ctx.fillText('Even you cannot transmit here', (x0 + x1) / 2, padT + plotH - 6);
+          ctx.textAlign = 'left';
+        }
       } else if (band.modes) {
         for (const seg of band.modes) {
           rows.forEach((cls, row) => {
