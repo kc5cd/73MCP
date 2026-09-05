@@ -62,6 +62,11 @@
     display: inline-block; width: 10px; height: 10px; border-radius: 2px;
     margin-right: 3px; vertical-align: -1px;
   }
+  #bandTooltip {
+    position: fixed; pointer-events: none; z-index: 10;
+    background: #0f1319; color: var(--text); border: 1px solid var(--border);
+    border-radius: 4px; padding: 3px 7px; font-size: 12px;
+  }
 </style>
 </head>
 <body>
@@ -152,6 +157,7 @@
 
 <div class="panel">
   <canvas id="chart" width="800" height="260"></canvas>
+  <div id="bandTooltip" hidden></div>
   <div class="readout">
     <div class="stat"><div class="v" id="minSwr">--</div><div class="k">Min SWR</div></div>
     <div class="stat"><div class="v" id="minFreq">--</div><div class="k">At frequency</div></div>
@@ -183,6 +189,7 @@
   const tuneBtn = $('tuneBtn');
   const canvas = $('chart');
   const ctx = canvas.getContext('2d');
+  const bandTooltipEl = $('bandTooltip');
   const minSwrEl = $('minSwr');
   const minFreqEl = $('minFreq');
   const minZEl = $('minZ');
@@ -335,6 +342,9 @@
   let ws = null;
   let lastPoints = [];
   let k4hezAnimHandle = null;
+  // Rebuilt on every drawBandOverlay() call: the on-screen rect + license
+  // class of each privilege bar currently drawn, for the hover tooltip.
+  let hoverBars = [];
 
   // Remember last-used sweep params across reloads (field convenience).
   for (const [el, key] of [[startMhz, 'nvt_start'], [stopMhz, 'nvt_stop'], [points, 'nvt_points'], [swrMaxSel, 'nvt_swrmax']]) {
@@ -369,6 +379,26 @@
   licenseSel.addEventListener('change', () => {
     localStorage.setItem('nvt_license', licenseSel.value);
     drawChart(lastPoints);
+  });
+
+  // Hover tooltip over a privilege bar names the license class it belongs
+  // to -- offsetX/offsetY are already in the same CSS-pixel coordinate
+  // space drawBandOverlay() draws in, so no devicePixelRatio conversion
+  // is needed to hit-test against hoverBars.
+  canvas.addEventListener('mousemove', (e) => {
+    const hit = hoverBars.find((b) => e.offsetX >= b.x0 && e.offsetX <= b.x1 && e.offsetY >= b.y0 && e.offsetY <= b.y1);
+    if (!hit) {
+      bandTooltipEl.hidden = true;
+      return;
+    }
+    bandTooltipEl.hidden = false;
+    bandTooltipEl.textContent = hit.label;
+    bandTooltipEl.style.left = (e.clientX + 12) + 'px';
+    bandTooltipEl.style.top = (e.clientY + 12) + 'px';
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    bandTooltipEl.hidden = true;
   });
 
   function log(msg, isError) {
@@ -655,6 +685,7 @@
   function drawBandOverlay(fMin, fMax, x, padT, plotH) {
     ctx.save();
     ctx.font = '9px sans-serif';
+    hoverBars = [];
 
     // Mode-color rows glow too in K4HEZ Style, on their own flicker clock
     // (ROW_FLICKER_PHASE/SPEED) so they don't pulse in lockstep with the
@@ -717,8 +748,10 @@
           rows.forEach((cls, row) => {
             if (band.licensedClasses && !band.licensedClasses.includes(cls)) return;
             setRowFill('blue');
-            ctx.fillRect(rx0, padT + row * rowH, rx1 - rx0, rowH);
-            strokeBar(rx0, padT + row * rowH, rx1 - rx0, rowH);
+            const by = padT + row * rowH;
+            ctx.fillRect(rx0, by, rx1 - rx0, rowH);
+            strokeBar(rx0, by, rx1 - rx0, rowH);
+            hoverBars.push({ x0: rx0, x1: rx1, y0: by, y1: by + rowH, label: cls });
           });
           ctx.shadowBlur = 0;
 
@@ -780,8 +813,10 @@
             const sx0 = x(s0), sx1 = x(s1);
             setRowFill(privilegeColor(seg, cls));
             const w = Math.max(1, sx1 - sx0);
-            ctx.fillRect(sx0, padT + row * rowH, w, rowH);
-            strokeBar(sx0, padT + row * rowH, w, rowH);
+            const by = padT + row * rowH;
+            ctx.fillRect(sx0, by, w, rowH);
+            strokeBar(sx0, by, w, rowH);
+            hoverBars.push({ x0: sx0, x1: sx0 + w, y0: by, y1: by + rowH, label: cls });
           });
         }
         ctx.shadowBlur = 0;
@@ -843,7 +878,10 @@
       ctx.fillText(swr.toFixed(swrMax > 10 ? 0 : 1), 2, y + 3);
     }
 
-    if (!pts.length) return;
+    if (!pts.length) {
+      hoverBars = [];
+      return;
+    }
 
     const freqs = pts.map((p) => p.freq_hz);
     const fMin = Math.min(...freqs), fMax = Math.max(...freqs);
@@ -852,6 +890,8 @@
 
     if (hamBandsEl.checked) {
       drawBandOverlay(fMin, fMax, x, padT, plotH);
+    } else {
+      hoverBars = [];
     }
 
     ctx.strokeStyle = '#4fb0ff';
