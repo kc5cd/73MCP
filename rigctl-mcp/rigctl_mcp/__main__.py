@@ -11,7 +11,11 @@ from __future__ import annotations
 import argparse
 import os
 
-from rigctl_client import DEFAULT_HOST, DEFAULT_PORT
+from rigctl_client import DEFAULT_HOST, DEFAULT_MAX_PTT_SECONDS, DEFAULT_PORT
+
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes")
 
 
 def main() -> None:
@@ -27,9 +31,25 @@ def main() -> None:
         default=int(os.environ.get("RIGCTLD_PORT", DEFAULT_PORT)),
         help=f"port of a running rigctld instance (default {DEFAULT_PORT})",
     )
+    parser.add_argument(
+        "--allow-ptt",
+        action="store_true",
+        default=_env_flag("RIGCTL_ALLOW_PTT"),
+        help="enable the set_ptt tool (off by default -- it keys a transmitter)",
+    )
+    parser.add_argument(
+        "--max-ptt-seconds",
+        type=float,
+        default=float(os.environ.get("RIGCTL_MAX_PTT_SECONDS", DEFAULT_MAX_PTT_SECONDS)),
+        help="auto-unkey watchdog: seconds after set_ptt(True) before it's forced back off if "
+        f"set_ptt(False) never arrives (default {DEFAULT_MAX_PTT_SECONDS}s -- long enough for "
+        "most digital modes' transmit cycles, e.g. WSPR's ~110s; only matters with --allow-ptt)",
+    )
     args = parser.parse_args()
     os.environ["RIGCTLD_HOST"] = args.rigctld_host
     os.environ["RIGCTLD_PORT"] = str(args.rigctld_port)
+    os.environ["RIGCTL_ALLOW_PTT"] = "1" if args.allow_ptt else ""
+    os.environ["RIGCTL_MAX_PTT_SECONDS"] = str(args.max_ptt_seconds)
 
     from .server import mcp  # imported after the env vars are set, so _get_client() picks them up
 

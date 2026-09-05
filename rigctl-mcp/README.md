@@ -16,16 +16,17 @@ and reusing that connection afterward.
 - `rigctl_client/` — protocol + TCP client, no MCP awareness. `protocol.py` has pure
   `build_command()`/`parse_response()` functions (no I/O); `client.py`'s `RigctlClient` holds
   the persistent `asyncio` connection (lock-guarded, one command at a time) and exposes
-  `get_status()`/`set_frequency()`/`set_mode()`.
+  `get_status()`/`set_frequency()`/`set_mode()`/`set_ptt()`.
 - `rigctl_mcp/` — the MCP server itself (stdio transport), a thin wrapper over
   `rigctl_client`. Tools:
   - `get_status()` — dial frequency (Hz), mode, passband (Hz), VFO, PTT state.
   - `set_frequency(hz)`
   - `set_mode(mode, passband_hz=None)`
-
-  `set_ptt` is deliberately not included yet — it keys a transmitter and deserves its own
-  safeguards discussion (e.g. a required `confirm` flag) rather than being a plain tool
-  alongside the read/frequency/mode ones. See `PLAN.md` for the full scope decision.
+  - `set_ptt(on, confirm=None)` — **only registered at all if the server was started with
+    `--allow-ptt`**. Keying on (`on=True`) requires `confirm="transmit"` exactly; unkeying
+    never needs it. A server-side watchdog force-unkeys after `--max-ptt-seconds` (default
+    130s) even if `set_ptt(False)` never arrives. See `PLAN.md`'s "First-pass tool scope" for
+    the full safeguards rationale.
 
 ## Running
 
@@ -36,10 +37,21 @@ python -m rigctl_mcp --rigctld-host 127.0.0.1 --rigctld-port 4532
 Flags default to `RIGCTLD_HOST`/`RIGCTLD_PORT` env vars, then `127.0.0.1`/`4532`. Requires a
 `rigctld` instance already running and reachable at that address.
 
+To also enable `set_ptt` (off by default — it keys a transmitter):
+
+```
+python -m rigctl_mcp --rigctld-host 127.0.0.1 --rigctld-port 4532 --allow-ptt --max-ptt-seconds 130
+```
+
+(`RIGCTL_ALLOW_PTT=1` / `RIGCTL_MAX_PTT_SECONDS` env vars work the same way.) Pick
+`--max-ptt-seconds` to comfortably clear your longest expected transmit cycle — the default
+(130s) covers WSPR's ~110s, but adjust it down for a pass built only around short CW/voice
+keying, or up for a longer digital-mode cycle.
+
 ## Status
 
 Built 2026-09-05: all 4 implementation phases from `PLAN.md` complete (protocol layer, TCP
-client, MCP server, verification). 17 tests pass (`pytest tests/ -v`) — `test_protocol.py`
+client, MCP server, verification). 18 tests pass (`pytest tests/ -v`) — `test_protocol.py`
 against hand-built ERP text, `test_client.py`'s `RigctlClient` against an in-process TCP stub
 standing in for `rigctld` (its protocol is a raw line-based stream, not HTTP, so a mock
 transport wouldn't be faithful). Manually verified end-to-end over stdio with a real MCP
@@ -54,3 +66,9 @@ change confirmed by a follow-up `get_status`. One finding: the Dummy backend acc
 string as a mode without validating it, so it doesn't exercise the nonzero-`RPRT` → `ToolError`
 path — that path stays covered by the in-process-stub tests instead, where the response can be
 scripted deliberately.
+
+**`set_ptt` added and verified 2026-09-05**: the safeguards deferred on 2026-09-04 are all
+implemented together — opt-in `--allow-ptt`, required `confirm="transmit"` to key on, and a
+`--max-ptt-seconds` auto-unkey watchdog. Verified against the same real Dummy `rigctld`
+(simulated PTT, no real transmitter): opt-in gating, both confirm-rejection cases, successful
+keying, the watchdog actually firing on schedule, and confirm-free unkeying all confirmed.

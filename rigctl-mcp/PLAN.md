@@ -86,11 +86,29 @@ Radio (owned by rigctld -- serial/USB/network backend, whatever rigctld was star
 - `set_frequency(hz: int)`
 - `set_mode(mode: str, passband_hz: int | None = None)`
 
-**`set_ptt` is explicitly deferred, decided with Casey 2026-09-04** — it keys a transmitter,
-and deserves its own discussion about safeguards (e.g. a required `confirm` flag) rather than
-being added as a plain tool alongside the read/frequency/mode ones. Not in this pass.
+**`set_ptt(on, confirm=None)` — added 2026-09-05** after the safeguards discussion deferred on
+2026-09-04. Three safeguards, all required together (not a menu to pick from):
 
-Also deferred: `\dump_state`-derived rig-capability introspection, VFO-targeted multi-VFO
+1. **Opt-in at the server level**: the tool doesn't exist as far as an MCP client can see
+   unless the server was started with `--allow-ptt` / `RIGCTL_ALLOW_PTT=1`. Decided at process
+   start (tool registration happens at import time), not per-call.
+2. **`confirm="transmit"` required to key on** — cheap insurance against an accidental or
+   hallucinated call. Unkeying (`on=False`) never requires it, since that direction is always
+   safe.
+3. **Server-side auto-unkey watchdog**: any successful `on=True` schedules a forced `on=False`
+   after `--max-ptt-seconds` (default 130s, see `rigctl_client.DEFAULT_MAX_PTT_SECONDS`) even
+   if `set_ptt(False)` never arrives, canceled/rescheduled on every subsequent `set_ptt` call.
+   The default is set well above the longest common digital-mode transmit cycle (WSPR's
+   ~110s), not just a quick voice/CW over-key, per Casey's explicit "protocols are 15s-2min
+   long" note when this was implemented.
+
+Every `set_ptt` call and every watchdog firing is logged (`rigctl_mcp.ptt` logger) for an
+audit trail. Verified end-to-end (2026-09-05) against a real `rigctld` (Hamlib Dummy backend
+-- simulated PTT, no real transmitter involved): opt-in gating, both confirm-rejection cases,
+successful keying, the watchdog actually auto-unkeying on schedule, and confirm-free
+unkeying all confirmed.
+
+Still deferred: `\dump_state`-derived rig-capability introspection, VFO-targeted multi-VFO
 control, anything beyond a single default rig/connection.
 
 ## Verification
@@ -235,12 +253,11 @@ manually below (same reasoning the other two sub-projects' plans used).
 
 ### Not in this pass
 
-- `set_ptt` (deferred — needs its own safeguards discussion; see "First-pass tool scope").
 - `\dump_state`-derived rig-capability introspection.
 - VFO-targeted multi-VFO control.
-- Real-`rigctld`/real-rig verification (in-process stub server only, this pass).
 
-## Next step
+## Status
 
-Implementation plan above is finalized and approved but **not yet built** — resume with
-Phase 1 when Casey is ready.
+All 4 phases built 2026-09-05, plus real-`rigctld` verification (Hamlib Dummy backend) the
+same day, plus `set_ptt` (see "First-pass tool scope" above) and its own real-hardware-style
+verification against the same Dummy backend. Nothing left outstanding from this plan.

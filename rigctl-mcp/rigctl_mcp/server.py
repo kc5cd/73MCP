@@ -14,13 +14,23 @@ to see, so _call() below re-raises them as ToolError.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 from typing import Any, Awaitable, TypeVar
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from rigctl_client import DEFAULT_HOST, DEFAULT_PORT, RigctlClient, RigctlError
+from rigctl_client import (
+    DEFAULT_HOST,
+    DEFAULT_MAX_PTT_SECONDS,
+    DEFAULT_PORT,
+    RigctlClient,
+    RigctlError,
+)
+
+logger = logging.getLogger("rigctl_mcp.ptt")
 
 mcp = MCPServer("rigctl-mcp")
 
@@ -66,3 +76,50 @@ async def set_mode(mode: str, passband_hz: int | None = None) -> dict[str, str]:
     mode)."""
     await _call(_get_client().set_mode(mode, passband_hz))
     return {"status": "ok"}
+
+
+# set_ptt keys a real transmitter, so it only exists at all if the server was
+# explicitly started with --allow-ptt / RIGCTL_ALLOW_PTT -- an MCP client
+# never even sees it as a callable tool otherwise. This has to be decided at
+# import time (tool registration happens via the decorator below), which is
+# why __main__.py sets the env var before importing this module, same
+# ordering constraint as RIGCTLD_HOST/RIGCTLD_PORT.
+_ALLOW_PTT = os.environ.get("RIGCTL_ALLOW_PTT", "").strip().lower() in ("1", "true", "yes")
+_MAX_PTT_SECONDS = float(os.environ.get("RIGCTL_MAX_PTT_SECONDS", DEFAULT_MAX_PTT_SECONDS))
+
+_ptt_watchdog: asyncio.Task[None] | None = None
+
+
+async def _ptt_watchdog_fire() -> None:
+    await asyncio.sleep(_MAX_PTT_SECONDS)
+    logger.warning("PTT watchdog fired after %.0fs -- auto-unkeying", _MAX_PTT_SECONDS)
+    try:
+        await _get_client().set_ptt(False)
+    except RigctlError:
+        logger.exception("PTT watchdog's auto-unkey call itself failed")
+
+
+if _ALLOW_PTT:
+
+    @mcp.tool()
+    async def set_ptt(on: bool, confirm: str | None = None) -> dict[str, Any]:
+        """Key (on=True) or unkey (on=False) the transmitter. Keying ON
+        requires confirm="transmit" exactly -- unkeying never needs it, since
+        that direction is always safe. A server-side watchdog automatically
+        unkeys after the configured max duration (see --max-ptt-seconds)
+        even if set_ptt(False) never arrives, so a stuck-on key can't outlast
+        it regardless of what the caller does."""
+        global _ptt_watchdog
+        if on and confirm != "transmit":
+            raise ToolError('set_ptt(on=True) requires confirm="transmit"')
+
+        logger.info("set_ptt(on=%s) requested", on)
+        await _call(_get_client().set_ptt(on))
+
+        if _ptt_watchdog is not None:
+            _ptt_watchdog.cancel()
+            _ptt_watchdog = None
+        if on:
+            _ptt_watchdog = asyncio.create_task(_ptt_watchdog_fire())
+
+        return {"status": "ok", "ptt": on}

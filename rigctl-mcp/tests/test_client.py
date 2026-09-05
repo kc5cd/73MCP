@@ -20,6 +20,8 @@ RESPONSES = {
     "+F 14074000": ["set_freq: 14074000", "RPRT 0"],
     "+M USB 2400": ["set_mode: USB 2400", "RPRT 0"],
     "+F -1": ["set_freq: -1", "RPRT -1"],
+    "+T 1": ["set_ptt: 1", "RPRT 0"],
+    "+T 0": ["set_ptt: 0", "RPRT 0"],
 }
 
 
@@ -94,6 +96,16 @@ async def test_nonzero_rprt_raises_rigctl_error(stub_rigctld):
             await client.set_frequency(-1)
         assert exc_info.value.rprt == -1
         assert exc_info.value.command == "set_freq"
+    finally:
+        await client.close()
+
+
+async def test_set_ptt_on_and_off(stub_rigctld):
+    host, port = stub_rigctld
+    client = RigctlClient(host, port)
+    try:
+        await client.set_ptt(True)
+        await client.set_ptt(False)
     finally:
         await client.close()
 

@@ -15,6 +15,11 @@ from .protocol import RPRT_RE, ERPResponse, build_command, parse_response
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 4532
 
+# Some digital-mode transmit cycles run long (WSPR ~110s) -- the watchdog
+# default has to clear the longest common one comfortably, not just guard
+# against a quick voice/CW over-key.
+DEFAULT_MAX_PTT_SECONDS = 130.0
+
 
 class RigctlError(Exception):
     """rigctld returned a nonzero RPRT for a command."""
@@ -84,3 +89,9 @@ class RigctlClient:
 
     async def set_mode(self, mode: str, passband_hz: int | None = None) -> None:
         await self._send("M", mode, str(passband_hz if passband_hz is not None else 0))
+
+    async def set_ptt(self, on: bool) -> None:
+        """Key (on=True) or unkey (on=False) the transmitter. No safeguards
+        at this layer -- confirmation and the auto-unkey watchdog are
+        rigctl_mcp's job, not this protocol client's."""
+        await self._send("T", "1" if on else "0")
